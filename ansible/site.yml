@@ -1,0 +1,42 @@
+---
+# ============================================================
+# Ansible Main Playbook — SOC-as-Code PFS
+# ============================================================
+# Ordre d'exécution :
+# 1. Configurer le serveur Wazuh (SOC VPC)
+# 2. Installer les agents Wazuh sur toutes les instances client
+# 3. Installer DVWA sur l'instance dédiée
+# 4. Installer Metasploitable sur l'instance dédiée
+# ============================================================
+
+# ----- Play 1 : Wazuh Server (VPC SOC) -----
+- name: "🛡️ Configure Wazuh Server"
+  hosts: role_wazuh_server
+  become: true
+  gather_facts: true
+  roles:
+    - wazuh-server
+
+# ----- Play 2 : Wazuh Agents (VPC Client) -----
+- name: "📡 Install Wazuh Agents on Client VPC"
+  hosts: role_client
+  become: true
+  gather_facts: true
+  roles:
+    - wazuh-agent
+
+# ----- Play 3 : DVWA (instance spécifique) -----
+- name: "🕸️ Deploy DVWA (Vulnerable Web App)"
+  hosts: role_dvwa
+  become: true
+  gather_facts: true
+  roles:
+    - dvwa
+
+# ----- Play 4 : Metasploitable target -----
+- name: "🎯 Configure Metasploitable Target"
+  hosts: role_metasploitable
+  become: true
+  gather_facts: true
+  roles:
+    - metasploitable

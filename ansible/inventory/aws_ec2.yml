@@ -1,0 +1,43 @@
+plugin: aws_ec2
+
+# ============================================================
+# Région AWS à scanner
+# ============================================================
+regions:
+  - us-east-1
+
+# ============================================================
+# Filtres : uniquement les instances de ce projet, actives
+# ============================================================
+filters:
+  tag:Project: pfs-soc
+  instance-state-name: running
+
+# ============================================================
+# Groupement par tag "Role" → utilisé dans site.yml
+# Ex: tag Role=wazuh_server → groupe "role_wazuh_server"
+#     tag Role=client       → groupe "role_client"
+# ============================================================
+keyed_groups:
+  - key: tags.Role
+    prefix: role
+    separator: "_"
+  - key: tags.VPC
+    prefix: vpc
+    separator: "_"
+
+# ============================================================
+# Hostname : utiliser l'IP publique pour les instances publiques
+# (bastion, wazuh) et l'IP privée pour les instances privées
+# via ProxyJump bastion
+# ============================================================
+hostnames:
+  - ip-address
+  - dns-name
+
+# ============================================================
+# Variables host : injecter les tags comme variables Ansible
+# ============================================================
+compose:
+  ansible_host: public_ip_address
+  ansible_user: "'ubuntu'"

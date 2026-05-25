@@ -1,0 +1,42 @@
+name: "🔐 Shift-Left Security Scan"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "terraform/**"
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+
+jobs:
+  checkov:
+    name: "Checkov — IaC Security Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform/
+          framework: terraform
+          soft_fail: true
+          output_format: cli
+          download_external_modules: true
+
+  tfsec:
+    name: "Tfsec — Terraform Security Scanner"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          working_directory: terraform/
+          soft_fail: true
+          format: lovely

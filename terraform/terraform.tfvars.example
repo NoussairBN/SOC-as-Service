@@ -1,0 +1,18 @@
+# ============================================================
+# Fichier d'exemple — Copier en terraform.tfvars (NON commité)
+# ============================================================
+
+aws_region     = "us-east-1"
+project_name   = "pfs-soc"
+environment    = "dev"
+
+# Remplacer par le nom de ton bucket S3 créé en Phase 0
+# (récupérable via : aws s3 ls --profile pfs-soc)
+# tfstate_bucket = "pfs-soc-tfstate-XXXXXXXX"
+
+# Ta clé publique SSH (contenu de ~/.ssh/pfs-soc-key.pub)
+ssh_public_key = "ssh-ed25519 AAAA... pfs-soc-key"
+
+# Ton IP publique pour restreindre l'accès SSH au bastion
+# (récupérable via : curl ifconfig.me)
+my_public_ip = "0.0.0.0"   # ← OBLIGATOIRE à personnaliser !
