@@ -195,10 +195,14 @@ jobs:
               ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
             children:
               soc:
+                vars:
+                  wazuh_manager_ip: ${WAZUH_PRIV}
                 hosts:
                   wazuh-server:
                     ansible_host: ${WAZUH_PRIV}
               client:
+                vars:
+                  wazuh_manager_ip: ${WAZUH_PRIV}
                 hosts:
                   dvwa:
                     ansible_host: ${DVWA}
