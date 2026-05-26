@@ -51,12 +51,11 @@
     mode: '0640'
   notify: restart wazuh-agent
 
-- name: "Agent | Register agent with manager (using password)"
+- name: "Agent | Register agent with manager (no password — default authd)"
   shell: |
     /var/ossec/bin/agent-auth \
       -m {{ wazuh_manager_ip }} \
-      -A {{ inventory_hostname }} \
-      -P pfs-soc-wazuh-2026
+      -A {{ inventory_hostname }}
   args:
     creates: /var/ossec/etc/client.keys
   notify: restart wazuh-agent

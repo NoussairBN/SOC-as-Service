@@ -47,10 +47,13 @@
     <location>/var/log/apache2/access.log</location>
   </localfile>
 
+  <!-- Docker container logs (DVWA Apache via Docker) -->
   <localfile>
     <log_format>syslog</log_format>
-    <location>/var/log/dpkg.log</location>
+    <location>/var/lib/docker/containers/*/*.log</location>
   </localfile>
+
+
 
   <!-- Active Response -->
   <active-response>
