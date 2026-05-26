@@ -39,10 +39,10 @@ jobs:
           pip install checkov
           checkov -d terraform/ --soft-fail || true
 
-      - name: Run Tfsec
+      - name: Run Trivy (IaC scan - remplace tfsec archivé)
         run: |
-          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
-          tfsec terraform/ --soft-fail || true
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          trivy config terraform/ --exit-code 0 --severity HIGH,CRITICAL || true
 
   # ── JOB 2 : Terraform ──────────────────────────────────────
   terraform:
