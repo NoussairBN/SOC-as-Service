@@ -131,7 +131,7 @@ jobs:
         run: git clone https://github.com/${{ github.repository }}.git .
 
       - name: Install Ansible
-        run: pip install ansible
+        run: pip install ansible passlib
 
       - name: Setup SSH Key and Config
         run: |
