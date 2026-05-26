@@ -34,13 +34,15 @@
 
 - name: "Agent | Install wazuh-agent (pointing to manager)"
   apt:
-    name: wazuh-agent
+    name: wazuh-agent=4.11.2-1
     state: present
     update_cache: yes
+    allow_downgrade: yes
   environment:
     WAZUH_MANAGER: "{{ wazuh_manager_ip }}"
     WAZUH_AGENT_NAME: "{{ inventory_hostname }}"
   when: not agent_installed.stat.exists
+
 
 - name: "Agent | Configure ossec.conf with manager address"
   template:
@@ -51,14 +53,16 @@
     mode: '0640'
   notify: restart wazuh-agent
 
-- name: "Agent | Register agent with manager (no password — default authd)"
+- name: "Agent | Register agent with manager (with authd password)"
   shell: |
     /var/ossec/bin/agent-auth \
       -m {{ wazuh_manager_ip }} \
-      -A {{ inventory_hostname }}
+      -A {{ inventory_hostname }} \
+      -P pfs-soc-wazuh-2026
   args:
     creates: /var/ossec/etc/client.keys
   notify: restart wazuh-agent
+
 
 - name: "Agent | Enable and start wazuh-agent service"
   service:
