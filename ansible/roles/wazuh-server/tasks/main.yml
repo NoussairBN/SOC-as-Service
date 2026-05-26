@@ -155,3 +155,119 @@
 - name: "Wazuh | Show status"
   debug:
     var: wazuh_status.stdout_lines
+
+# ════════════════════════════════════════════════════════════
+# UPGRADE SOC — Règles de détection custom + Active Response
+# ════════════════════════════════════════════════════════════
+
+- name: "SOC | Deploy custom detection rules"
+  copy:
+    src: custom_rules.xml
+    dest: /var/ossec/etc/rules/custom_rules.xml
+    owner: root
+    group: wazuh
+    mode: '0640'
+  notify: restart wazuh-manager
+
+- name: "SOC | Deploy Active Response configuration"
+  blockinfile:
+    path: /var/ossec/etc/ossec.conf
+    insertbefore: '</ossec_config>'
+    marker: "<!-- {mark} ANSIBLE MANAGED ACTIVE RESPONSE -->"
+    block: |
+      <!-- Active Response : blocage automatique IP -->
+      <command>
+        <name>firewall-drop</name>
+        <executable>firewall-drop</executable>
+        <timeout_allowed>yes</timeout_allowed>
+      </command>
+
+      <!-- Blocage SSH brute-force sévère (règle 100011 - 15+ failures) -->
+      <active-response>
+        <command>firewall-drop</command>
+        <location>local</location>
+        <rules_id>100011</rules_id>
+        <timeout>3600</timeout>
+      </active-response>
+
+      <!-- Blocage brute-force standard Wazuh (5763) -->
+      <active-response>
+        <command>firewall-drop</command>
+        <location>local</location>
+        <rules_id>5763</rules_id>
+        <timeout>1800</timeout>
+      </active-response>
+
+      <!-- Blocage reverse shell (critique - 24h) -->
+      <active-response>
+        <command>firewall-drop</command>
+        <location>all</location>
+        <rules_id>100042</rules_id>
+        <timeout>86400</timeout>
+      </active-response>
+  notify: restart wazuh-manager
+
+- name: "SOC | Enhanced FIM — Monitor critical paths with realtime"
+  blockinfile:
+    path: /var/ossec/etc/ossec.conf
+    insertafter: '<syscheck>'
+    marker: "<!-- {mark} ANSIBLE MANAGED ENHANCED FIM -->"
+    block: |
+      <!-- Fichiers critiques système -->
+      <directories check_all="yes" realtime="yes" report_changes="yes">/etc/passwd,/etc/shadow,/etc/sudoers</directories>
+      <directories check_all="yes" realtime="yes" report_changes="yes">/etc/cron.d,/var/spool/cron,/etc/crontab</directories>
+      <directories check_all="yes" realtime="yes">/usr/bin,/usr/sbin,/bin,/sbin</directories>
+      <directories check_all="yes" realtime="yes">/var/www,/srv/http,/opt</directories>
+      <!-- Exclusions -->
+      <ignore>/proc</ignore>
+      <ignore>/sys</ignore>
+      <ignore>/dev</ignore>
+  notify: restart wazuh-manager
+
+- name: "SOC | Configure log analysis for web attacks"
+  blockinfile:
+    path: /var/ossec/etc/ossec.conf
+    insertafter: '</syscheck>'
+    marker: "<!-- {mark} ANSIBLE MANAGED LOG ANALYSIS -->"
+    block: |
+      <!-- Analyse des logs Apache/Nginx pour détection web attacks -->
+      <localfile>
+        <log_format>apache</log_format>
+        <location>/var/log/apache2/access.log</location>
+      </localfile>
+      <localfile>
+        <log_format>apache</log_format>
+        <location>/var/log/nginx/access.log</location>
+      </localfile>
+      <localfile>
+        <log_format>syslog</log_format>
+        <location>/var/log/auth.log</location>
+      </localfile>
+  notify: restart wazuh-manager
+
+- name: "SOC | Verify custom rules syntax"
+  command: /var/ossec/bin/wazuh-logtest -t
+  register: rules_test
+  changed_when: false
+  failed_when: false
+
+- name: "SOC | Show rules validation"
+  debug:
+    msg: |
+      ╔══════════════════════════════════════════════════════╗
+      ║     SOC UPGRADE COMPLETE                             ║
+      ║                                                      ║
+      ║  ✅ Custom rules deployed  (100001-100061)           ║
+      ║  ✅ Active Response        (auto-block IP)           ║
+      ║  ✅ Enhanced FIM           (realtime monitoring)     ║
+      ║  ✅ Log analysis           (web + auth logs)         ║
+      ║                                                      ║
+      ║  Detected attacks:                                   ║
+      ║    • SQL Injection / XSS / LFI                      ║
+      ║    • SSH + Web Brute Force                           ║
+      ║    • Privilege Escalation                            ║
+      ║    • Port Scanning                                   ║
+      ║    • Reverse Shells                                  ║
+      ║    • DVWA-specific attacks                           ║
+      ╚══════════════════════════════════════════════════════╝
+

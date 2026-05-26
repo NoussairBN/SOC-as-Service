@@ -1,0 +1,62 @@
+<!-- ============================================================ -->
+<!-- active_response.xml                                          -->
+<!-- Blocage automatique des attaquants — SOC-as-Service          -->
+<!-- ============================================================ -->
+<ossec_config>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- COMMANDES ACTIVE RESPONSE                                  -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+
+  <!-- Blocage IP via iptables -->
+  <command>
+    <name>firewall-drop</name>
+    <executable>firewall-drop</executable>
+    <timeout_allowed>yes</timeout_allowed>
+  </command>
+
+  <!-- Désactivation d'un compte utilisateur -->
+  <command>
+    <name>disable-account</name>
+    <executable>disable-account</executable>
+    <timeout_allowed>yes</timeout_allowed>
+  </command>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- RÈGLES D'ACTIVE RESPONSE                                   -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+
+  <!-- Blocage automatique SSH brute-force (règle custom 100011) -->
+  <!-- Timeout : 3600s = 1 heure de blocage                      -->
+  <active-response>
+    <command>firewall-drop</command>
+    <location>local</location>
+    <rules_id>100011</rules_id>
+    <timeout>3600</timeout>
+  </active-response>
+
+  <!-- Blocage standard Wazuh (règle 5763 - SSH brute-force) -->
+  <active-response>
+    <command>firewall-drop</command>
+    <location>local</location>
+    <rules_id>5763</rules_id>
+    <timeout>1800</timeout>
+  </active-response>
+
+  <!-- Blocage web brute-force -->
+  <active-response>
+    <command>firewall-drop</command>
+    <location>local</location>
+    <rules_id>100012</rules_id>
+    <timeout>1800</timeout>
+  </active-response>
+
+  <!-- Blocage sur détection reverse shell (critique) -->
+  <active-response>
+    <command>firewall-drop</command>
+    <location>all</location>
+    <rules_id>100042</rules_id>
+    <timeout>86400</timeout>
+  </active-response>
+
+</ossec_config>
