@@ -16,18 +16,49 @@ jobs:
 
     steps:
       - name: Clone repository (public, no token needed)
-        run: |
-          git clone https://github.com/${{ github.repository }}.git .
+        run: git clone https://github.com/${{ github.repository }}.git .
 
       - name: Install Ansible
         run: pip install ansible
 
-      - name: Setup SSH Key
+      - name: Setup SSH Key and Config
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/pfs-soc-key
+
+          # Ecrire la cle privee en supprimant les CRLF Windows
+          printf '%s' "${{ secrets.EC2_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/pfs-soc-key
           chmod 600 ~/.ssh/pfs-soc-key
           ssh-keygen -l -f ~/.ssh/pfs-soc-key
+
+          # SSH config : cle explicite pour CHAQUE hop (bastion + prives)
+          cat > ~/.ssh/config << 'EOF'
+          Host bastion
+            HostName 32.194.75.46
+            User ubuntu
+            IdentityFile ~/.ssh/pfs-soc-key
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ServerAliveInterval 30
+
+          Host 10.0.*.*
+            User ubuntu
+            IdentityFile ~/.ssh/pfs-soc-key
+            ProxyJump bastion
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+
+          Host 10.1.*.*
+            User ubuntu
+            IdentityFile ~/.ssh/pfs-soc-key
+            ProxyJump bastion
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+
+          # Test connexion bastion
+          echo "=== Test SSH Bastion ==="
+          ssh bastion 'echo BASTION_OK && hostname && uptime'
 
       - name: Write Ansible Inventory
         run: |
@@ -36,28 +67,20 @@ jobs:
             vars:
               ansible_user: ubuntu
               ansible_ssh_private_key_file: ~/.ssh/pfs-soc-key
+              ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
             children:
               soc:
                 hosts:
                   wazuh-server:
                     ansible_host: 10.1.1.109
-                    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyJump=ubuntu@32.194.75.46"
               client:
                 hosts:
                   dvwa:
                     ansible_host: 10.0.2.206
-                    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyJump=ubuntu@32.194.75.46"
                   metasploitable:
                     ansible_host: 10.0.2.141
-                    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyJump=ubuntu@32.194.75.46"
           EOF
-
-      - name: Test SSH connectivity to Bastion
-        run: |
-          ssh -i ~/.ssh/pfs-soc-key \
-              -o StrictHostKeyChecking=no \
-              -o ConnectTimeout=10 \
-              ubuntu@32.194.75.46 "echo 'Bastion reachable OK'"
+          cat ansible/inventory/hosts.yml
 
       - name: Run Ansible Playbook
         working-directory: ansible

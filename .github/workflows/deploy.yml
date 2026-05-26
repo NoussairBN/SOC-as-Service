@@ -201,19 +201,6 @@ jobs:
           echo "Inventory:"
           cat ansible/inventory/hosts.yml
 
-      - name: Wait for instances to be SSH-ready
-        run: |
-          BASTION="${{ needs.terraform.outputs.bastion_ip }}"
-          echo "Waiting for bastion ${BASTION}..."
-          for i in $(seq 1 12); do
-            if ssh -i ~/.ssh/pfs-soc-key -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@${BASTION} 'echo ready' 2>/dev/null; then
-              echo "Bastion is ready!"
-              break
-            fi
-            echo "Attempt $i/12 — waiting 10s..."
-            sleep 10
-          done
-
       - name: Run Ansible Playbook
         working-directory: ansible
         env:
