@@ -1,0 +1,9 @@
+output "vpc_client_id"            { value = aws_vpc.client.id }
+output "vpc_soc_id"               { value = aws_vpc.soc.id }
+output "client_public_subnet_id"  { value = aws_subnet.client_public.id }
+output "client_private_subnet_id" { value = aws_subnet.client_private.id }
+output "soc_public_subnet_id"     { value = aws_subnet.soc_public.id }
+output "sg_bastion_id"            { value = aws_security_group.bastion.id }
+output "sg_client_private_id"     { value = aws_security_group.client_private.id }
+output "sg_wazuh_id"              { value = aws_security_group.wazuh.id }
+output "vpc_peering_id"           { value = aws_vpc_peering_connection.client_to_soc.id }
