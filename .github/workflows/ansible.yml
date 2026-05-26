@@ -3,6 +3,9 @@ name: "⚙️ Ansible — Configure SOC Stack"
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   ansible:
     name: "Run Ansible Playbook"
