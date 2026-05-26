@@ -136,8 +136,9 @@ jobs:
       - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/pfs-soc-key
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/pfs-soc-key
           chmod 600 ~/.ssh/pfs-soc-key
+          ssh-keygen -l -f ~/.ssh/pfs-soc-key
 
       - name: Generate Ansible Inventory from Terraform outputs
         run: |
