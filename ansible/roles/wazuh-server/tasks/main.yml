@@ -150,15 +150,6 @@
     mode: '0640'
   notify: restart wazuh-manager
 
-- name: "Wazuh | Enable File Integrity Monitoring on key paths"
-  blockinfile:
-    path: /var/ossec/etc/ossec.conf
-    insertafter: '<syscheck>'
-    marker: "<!-- {mark} ANSIBLE MANAGED FIM BLOCK -->"
-    block: |
-      <directories check_all="yes" realtime="yes">/etc,/usr/bin,/usr/sbin</directories>
-      <directories check_all="yes" realtime="yes">/var/www,/home</directories>
-  notify: restart wazuh-manager
 
 - name: "Wazuh | Verify manager status"
   command: /var/ossec/bin/wazuh-control status
@@ -183,30 +174,27 @@
     mode: '0640'
   notify: restart wazuh-manager
 
-- name: "SOC | Deploy Active Response configuration"
-  blockinfile:
-    path: /var/ossec/etc/ossec.conf
-    insertbefore: '</ossec_config>'
-    marker: "<!-- {mark} ANSIBLE MANAGED ACTIVE RESPONSE -->"
-    block: |
-      <!-- Active Response : firewall-drop est deja defini par Wazuh -->
-      <!-- Blocage SSH brute-force severe (regle 100011 - 15+ failures) -->
+- name: "SOC | Deploy Active Response + Enhanced FIM + Log Analysis"
+  shell: |
+    MARKER="ANSIBLE MANAGED SOC UPGRADE v2"
+    if ! grep -q "$MARKER" /var/ossec/etc/ossec.conf; then
+      cat >> /var/ossec/etc/ossec.conf << 'EOCONF'
+    <!-- ANSIBLE MANAGED SOC UPGRADE v2 - DO NOT EDIT MANUALLY -->
+    <ossec_config>
+
+      <!-- ═══ ACTIVE RESPONSE ═══ -->
       <active-response>
         <command>firewall-drop</command>
         <location>local</location>
         <rules_id>100011</rules_id>
         <timeout>3600</timeout>
       </active-response>
-
-      <!-- Blocage brute-force standard Wazuh (5763) -->
       <active-response>
         <command>firewall-drop</command>
         <location>local</location>
         <rules_id>5763</rules_id>
         <timeout>1800</timeout>
       </active-response>
-
-      <!-- Blocage reverse shell (critique - 24h) -->
       <active-response>
         <command>firewall-drop</command>
         <location>all</location>
@@ -214,30 +202,18 @@
         <timeout>86400</timeout>
       </active-response>
 
-- name: "SOC | Enhanced FIM — Monitor critical paths with realtime"
-  blockinfile:
-    path: /var/ossec/etc/ossec.conf
-    insertafter: '<syscheck>'
-    marker: "<!-- {mark} ANSIBLE MANAGED ENHANCED FIM -->"
-    block: |
-      <!-- Fichiers critiques système -->
-      <directories check_all="yes" realtime="yes" report_changes="yes">/etc/passwd,/etc/shadow,/etc/sudoers</directories>
-      <directories check_all="yes" realtime="yes" report_changes="yes">/etc/cron.d,/var/spool/cron,/etc/crontab</directories>
-      <directories check_all="yes" realtime="yes">/usr/bin,/usr/sbin,/bin,/sbin</directories>
-      <directories check_all="yes" realtime="yes">/var/www,/srv/http,/opt</directories>
-      <!-- Exclusions -->
-      <ignore>/proc</ignore>
-      <ignore>/sys</ignore>
-      <ignore>/dev</ignore>
-  notify: restart wazuh-manager
+      <!-- ═══ ENHANCED FIM ═══ -->
+      <syscheck>
+        <directories check_all="yes" realtime="yes" report_changes="yes">/etc/passwd,/etc/shadow,/etc/sudoers</directories>
+        <directories check_all="yes" realtime="yes" report_changes="yes">/etc/cron.d,/var/spool/cron,/etc/crontab</directories>
+        <directories check_all="yes" realtime="yes">/usr/bin,/usr/sbin,/bin,/sbin</directories>
+        <directories check_all="yes" realtime="yes">/var/www,/srv/http,/opt</directories>
+        <ignore>/proc</ignore>
+        <ignore>/sys</ignore>
+        <ignore>/dev</ignore>
+      </syscheck>
 
-- name: "SOC | Configure log analysis for web attacks"
-  blockinfile:
-    path: /var/ossec/etc/ossec.conf
-    insertafter: '</syscheck>'
-    marker: "<!-- {mark} ANSIBLE MANAGED LOG ANALYSIS -->"
-    block: |
-      <!-- Analyse des logs Apache/Nginx pour détection web attacks -->
+      <!-- ═══ LOG ANALYSIS ═══ -->
       <localfile>
         <log_format>apache</log_format>
         <location>/var/log/apache2/access.log</location>
@@ -250,6 +226,17 @@
         <log_format>syslog</log_format>
         <location>/var/log/auth.log</location>
       </localfile>
+
+    </ossec_config>
+    EOCONF
+      echo "SOC config block appended"
+    else
+      echo "SOC config already present - skipping"
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: "'SOC config block appended' in soc_config_result.stdout"
+  register: soc_config_result
   notify: restart wazuh-manager
 
 - name: "SOC | Verify custom rules syntax"
