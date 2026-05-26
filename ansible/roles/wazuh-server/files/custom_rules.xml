@@ -1,17 +1,19 @@
 <!-- ============================================================ -->
 <!-- custom_rules.xml                                             -->
 <!-- Règles de détection SOC-as-Service — PFS 2026               -->
+<!-- Champs valides Wazuh : match, regex, url, id, srcip, status -->
 <!-- ============================================================ -->
 <group name="soc_custom,">
 
   <!-- ══════════════════════════════════════════════════════════ -->
   <!-- WEB ATTACKS — SQL Injection / XSS / LFI / RFI             -->
+  <!-- Basé sur les logs Apache/Nginx décodés (decoder: web-log) -->
   <!-- ══════════════════════════════════════════════════════════ -->
 
-  <!-- SQL Injection patterns dans les logs web -->
-  <rule id="100001" level="10" frequency="3" timeframe="60">
-    <if_matched_sid>31103</if_matched_sid>
-    <url_match>union|select|insert|drop|delete|update|exec|cast|convert|char|nchar|varchar|alter|having|truncate|group by</url_match>
+  <!-- SQL Injection patterns dans l'URL -->
+  <rule id="100001" level="10">
+    <if_sid>31103</if_sid>
+    <url>union select|union+select|select.*from|insert into|drop table|delete from|exec xp_|exec sp_|cast\(|convert\(|char\(|nchar\(|varchar\(|group by|order by|having 1</url>
     <description>SOC | SQL Injection attempt detected in web request</description>
     <mitre>
       <id>T1190</id>
@@ -19,10 +21,21 @@
     <group>web,sql_injection,attack,</group>
   </rule>
 
+  <!-- SQL Injection repeat - brute -->
+  <rule id="100002" level="12" frequency="5" timeframe="60">
+    <if_matched_sid>100001</if_matched_sid>
+    <same_source_ip />
+    <description>SOC | SQL Injection brute-force — multiple attempts from same IP</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>web,sql_injection,attack,</group>
+  </rule>
+
   <!-- XSS patterns -->
-  <rule id="100002" level="8">
+  <rule id="100003" level="8">
     <if_sid>31103</if_sid>
-    <url_match>&lt;script|javascript:|onerror=|onload=|eval\(|document\.cookie|alert\(</url_match>
+    <url>script>|javascript:|onerror=|onload=|eval\(|document\.cookie|alert\(|&lt;script|%3cscript</url>
     <description>SOC | XSS (Cross-Site Scripting) attempt detected</description>
     <mitre>
       <id>T1059.007</id>
@@ -31,9 +44,9 @@
   </rule>
 
   <!-- LFI / Path Traversal -->
-  <rule id="100003" level="9">
+  <rule id="100004" level="9">
     <if_sid>31103</if_sid>
-    <url_match>\.\./|\.\.\\|%2e%2e%2f|%252e%252e%252f|/etc/passwd|/etc/shadow|/proc/self</url_match>
+    <url>\.\./|\.\./|%2e%2e%2f|%252e%252e|/etc/passwd|/etc/shadow|/proc/self|/var/log|/etc/hosts</url>
     <description>SOC | Local File Inclusion / Path Traversal attempt detected</description>
     <mitre>
       <id>T1083</id>
@@ -41,11 +54,11 @@
     <group>web,lfi,attack,</group>
   </rule>
 
-  <!-- Web Scanner Detection (Nikto, SQLMap, Dirbuster) -->
-  <rule id="100004" level="8">
+  <!-- Web Scanner Detection -->
+  <rule id="100005" level="8">
     <if_sid>31103</if_sid>
-    <match>nikto|sqlmap|dirbuster|gobuster|wfuzz|burpsuite|nessus|openvas|masscan</match>
-    <description>SOC | Web vulnerability scanner detected</description>
+    <match>nikto|sqlmap|dirbuster|gobuster|wfuzz|masscan|nessus|openvas|w3af|skipfish</match>
+    <description>SOC | Web vulnerability scanner detected in User-Agent or request</description>
     <mitre>
       <id>T1595</id>
     </mitre>
@@ -56,7 +69,7 @@
   <!-- BRUTE FORCE — Seuils personnalisés                         -->
   <!-- ══════════════════════════════════════════════════════════ -->
 
-  <!-- SSH Brute Force — 5 tentatives en 60s (plus sensible que défaut) -->
+  <!-- SSH Brute Force — 5 tentatives en 60s -->
   <rule id="100010" level="12" frequency="5" timeframe="60">
     <if_matched_sid>5710</if_matched_sid>
     <same_source_ip />
@@ -64,11 +77,11 @@
     <mitre>
       <id>T1110.001</id>
     </mitre>
-    <group>authentication_failures,brute_force,pci_dss_11.4,gdpr_IV_35.7.d,</group>
+    <group>authentication_failures,brute_force,pci_dss_11.4,</group>
   </rule>
 
-  <!-- SSH Brute Force sévère — 15 tentatives -->
-  <rule id="100011" level="15" frequency="15" timeframe="60">
+  <!-- SSH Brute Force sévère — 15 tentatives → Active Response -->
+  <rule id="100011" level="15" frequency="15" timeframe="120">
     <if_matched_sid>5710</if_matched_sid>
     <same_source_ip />
     <description>SOC | CRITICAL: SSH Brute Force — 15+ failures — Active Response triggered</description>
@@ -78,48 +91,24 @@
     <group>authentication_failures,brute_force,active_response,</group>
   </rule>
 
-  <!-- Web Login Brute Force -->
-  <rule id="100012" level="10" frequency="8" timeframe="30">
-    <if_matched_sid>31103</if_matched_sid>
-    <url_match>login|signin|authenticate|wp-login|admin</url_match>
-    <match>401|403</match>
-    <same_source_ip />
-    <description>SOC | Web Login Brute Force detected</description>
-    <mitre>
-      <id>T1110.003</id>
-    </mitre>
-    <group>web,brute_force,authentication_failures,</group>
-  </rule>
-
   <!-- ══════════════════════════════════════════════════════════ -->
   <!-- PRIVILEGE ESCALATION                                       -->
   <!-- ══════════════════════════════════════════════════════════ -->
 
-  <!-- Sudo abuse — commandes dangereuses -->
+  <!-- Sudo vers root -->
   <rule id="100020" level="12">
     <if_sid>5402</if_sid>
-    <match>chmod 777|chmod +s|chown root|sudo su|sudo bash|sudo -i|sudo python|sudo perl|sudo ruby</match>
-    <description>SOC | Privilege escalation attempt via sudo</description>
+    <match>sudo su|sudo bash|sudo -i|sudo python|sudo perl|sudo ruby|sudo nc|sudo vim|sudo less|sudo more</match>
+    <description>SOC | Privilege escalation attempt via sudo shell/interpreter</description>
     <mitre>
       <id>T1548.003</id>
     </mitre>
     <group>privilege_escalation,sudo,</group>
   </rule>
 
-  <!-- SUID/SGID binary execution -->
-  <rule id="100021" level="10">
-    <if_sid>18107</if_sid>
-    <match>SUID|SGID|setuid|setgid</match>
-    <description>SOC | SUID/SGID binary execution detected — possible privilege escalation</description>
-    <mitre>
-      <id>T1548.001</id>
-    </mitre>
-    <group>privilege_escalation,suid,</group>
-  </rule>
-
-  <!-- /etc/passwd modification -->
-  <rule id="100022" level="14">
-    <if_sid>550</if_sid>
+  <!-- /etc/passwd modification détectée par FIM -->
+  <rule id="100021" level="14">
+    <if_sid>550,554</if_sid>
     <match>/etc/passwd|/etc/shadow|/etc/sudoers</match>
     <description>SOC | CRITICAL: System authentication file modified</description>
     <mitre>
@@ -129,37 +118,11 @@
   </rule>
 
   <!-- ══════════════════════════════════════════════════════════ -->
-  <!-- PORT SCANNING / RECONNAISSANCE                             -->
-  <!-- ══════════════════════════════════════════════════════════ -->
-
-  <!-- Nmap / Port scan detection -->
-  <rule id="100030" level="8">
-    <decoded_as>kernel</decoded_as>
-    <match>nmap|port scan|SYN scan|ACK scan|FIN scan|XMAS scan</match>
-    <description>SOC | Port scanning activity detected</description>
-    <mitre>
-      <id>T1046</id>
-    </mitre>
-    <group>recon,port_scan,</group>
-  </rule>
-
-  <!-- Connexions multiples ports depuis même IP -->
-  <rule id="100031" level="9" frequency="20" timeframe="10">
-    <if_matched_sid>40111</if_matched_sid>
-    <same_source_ip />
-    <description>SOC | Multiple port connections from same IP — possible port scan</description>
-    <mitre>
-      <id>T1046</id>
-    </mitre>
-    <group>recon,port_scan,</group>
-  </rule>
-
-  <!-- ══════════════════════════════════════════════════════════ -->
   <!-- MALWARE / PERSISTENCE                                      -->
   <!-- ══════════════════════════════════════════════════════════ -->
 
-  <!-- Crontab modification -->
-  <rule id="100040" level="11">
+  <!-- Crontab modification (FIM) -->
+  <rule id="100030" level="11">
     <if_sid>550,554</if_sid>
     <match>/etc/cron|/var/spool/cron|/etc/crontab</match>
     <description>SOC | Cron job modified — possible persistence mechanism</description>
@@ -169,22 +132,11 @@
     <group>persistence,cron,fim,</group>
   </rule>
 
-  <!-- New SUID binary created -->
-  <rule id="100041" level="12">
-    <if_sid>554</if_sid>
-    <match>/bin/|/usr/bin/|/usr/local/bin/</match>
-    <description>SOC | New executable created in system binary directory</description>
-    <mitre>
-      <id>T1574</id>
-    </mitre>
-    <group>persistence,malware,fim,</group>
-  </rule>
-
-  <!-- Reverse shell patterns -->
-  <rule id="100042" level="14">
-    <decoded_as>syslog</decoded_as>
-    <match>bash -i|nc -e|ncat -e|/bin/sh -i|python -c.*socket|perl -e.*socket|ruby -rsocket|php.*exec.*socket</match>
-    <description>SOC | CRITICAL: Reverse shell command detected</description>
+  <!-- Reverse shell patterns dans syslog -->
+  <rule id="100031" level="14">
+    <if_sid>0</if_sid>
+    <match>bash -i|nc -e /bin/|ncat -e|python -c.*socket|perl -e.*socket|ruby -rsocket</match>
+    <description>SOC | CRITICAL: Reverse shell command detected in system logs</description>
     <mitre>
       <id>T1059.004</id>
     </mitre>
@@ -192,29 +144,13 @@
   </rule>
 
   <!-- ══════════════════════════════════════════════════════════ -->
-  <!-- DATA EXFILTRATION                                          -->
+  <!-- DVWA SPECIFIC                                              -->
   <!-- ══════════════════════════════════════════════════════════ -->
 
-  <!-- Large outbound data transfer -->
-  <rule id="100050" level="10">
-    <decoded_as>syslog</decoded_as>
-    <match>curl|wget|scp|rsync|ftp|tftp</match>
-    <regex>OUT\s+\d{7,}</regex>
-    <description>SOC | Large outbound transfer — possible data exfiltration</description>
-    <mitre>
-      <id>T1041</id>
-    </mitre>
-    <group>exfiltration,data_transfer,</group>
-  </rule>
-
-  <!-- ══════════════════════════════════════════════════════════ -->
-  <!-- DVWA SPECIFIC — Vulnerable Web App Attacks                 -->
-  <!-- ══════════════════════════════════════════════════════════ -->
-
-  <!-- DVWA Command Injection -->
-  <rule id="100060" level="12">
+  <!-- Accès aux endpoints vulnérables DVWA -->
+  <rule id="100040" level="10">
     <if_sid>31103</if_sid>
-    <url_match>/dvwa/vulnerabilities/exec|/dvwa/vulnerabilities/sqli|/dvwa/vulnerabilities/xss</url_match>
+    <url>/dvwa/vulnerabilities/exec|/dvwa/vulnerabilities/sqli|/dvwa/vulnerabilities/xss_r|/dvwa/vulnerabilities/fi</url>
     <description>SOC | Attack attempt on DVWA vulnerable endpoint</description>
     <mitre>
       <id>T1190</id>
@@ -222,15 +158,28 @@
     <group>web,dvwa,attack,</group>
   </rule>
 
-  <!-- DVWA Command injection payload -->
-  <rule id="100061" level="14">
+  <!-- Command injection dans DVWA -->
+  <rule id="100041" level="13">
     <if_sid>31103</if_sid>
-    <url_match>ip=.*[;&|`]|cmd=|exec=</url_match>
-    <description>SOC | CRITICAL: Command injection payload in web request</description>
+    <url>/dvwa/vulnerabilities/exec</url>
+    <match>ip=.*[;&|`]</match>
+    <description>SOC | CRITICAL: OS Command Injection on DVWA exec endpoint</description>
     <mitre>
       <id>T1059</id>
     </mitre>
-    <group>web,command_injection,attack,</group>
+    <group>web,command_injection,dvwa,attack,</group>
+  </rule>
+
+  <!-- HTTP 4xx multiple sur DVWA = scan -->
+  <rule id="100042" level="8" frequency="20" timeframe="60">
+    <if_matched_sid>31103</if_matched_sid>
+    <same_source_ip />
+    <status>404|403|401</status>
+    <description>SOC | Web directory scan detected — multiple 4xx errors from same IP</description>
+    <mitre>
+      <id>T1595.003</id>
+    </mitre>
+    <group>web,scanner,recon,</group>
   </rule>
 
 </group>
