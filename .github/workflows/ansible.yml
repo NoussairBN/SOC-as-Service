@@ -6,14 +6,18 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   ansible:
     name: "Run Ansible Playbook"
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Clone repository (public, no token needed)
+        run: |
+          git clone https://github.com/${{ github.repository }}.git .
 
       - name: Install Ansible
         run: pip install ansible
