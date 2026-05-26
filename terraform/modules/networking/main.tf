@@ -108,9 +108,37 @@ resource "aws_route_table_association" "client_public" {
   route_table_id = aws_route_table.client_public.id
 }
 
+# ── Elastic IP pour NAT Gateway ─────────────────────────────
+resource "aws_eip" "nat_client" {
+  domain = "vpc"
+
+  tags = {
+    Name = "${var.project_name}-eip-nat-client"
+  }
+}
+
+# ── NAT Gateway — Client VPC (dans le subnet public) ─────────
+# Permet aux instances privées (DVWA, Meta) d'accéder à internet
+resource "aws_nat_gateway" "client" {
+  allocation_id = aws_eip.nat_client.id
+  subnet_id     = aws_subnet.client_public.id
+
+  tags = {
+    Name = "${var.project_name}-nat-client"
+  }
+
+  depends_on = [aws_internet_gateway.client]
+}
+
 # ── Route Table — Client Private ──────────────────────────────
 resource "aws_route_table" "client_private" {
   vpc_id = aws_vpc.client.id
+
+  # Internet via NAT Gateway (pour apt update, Docker pull, etc.)
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.client.id
+  }
 
   # Route vers le VPC SOC via le peering (pour les agents Wazuh)
   route {
