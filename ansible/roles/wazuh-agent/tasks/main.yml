@@ -1,0 +1,81 @@
+---
+# ============================================================
+# roles/wazuh-agent/tasks/main.yml
+# Installation et configuration de l'agent Wazuh
+# Cibles : DVWA + Metasploitable (VPC Client subnet privé)
+# ============================================================
+
+- name: "Agent | Install prerequisites"
+  apt:
+    name:
+      - curl
+      - gnupg
+      - apt-transport-https
+    state: present
+    update_cache: yes
+
+- name: "Agent | Check if already installed"
+  stat:
+    path: /var/ossec/bin/wazuh-agentd
+  register: agent_installed
+
+- name: "Agent | Add Wazuh GPG key"
+  shell: |
+    curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --dearmor -o /usr/share/keyrings/wazuh.gpg
+  args:
+    creates: /usr/share/keyrings/wazuh.gpg
+  when: not agent_installed.stat.exists
+
+- name: "Agent | Add Wazuh repository"
+  copy:
+    content: "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main"
+    dest: /etc/apt/sources.list.d/wazuh.list
+  when: not agent_installed.stat.exists
+
+- name: "Agent | Install wazuh-agent (pointing to manager)"
+  apt:
+    name: wazuh-agent
+    state: present
+    update_cache: yes
+  environment:
+    WAZUH_MANAGER: "{{ wazuh_manager_ip }}"
+    WAZUH_AGENT_NAME: "{{ inventory_hostname }}"
+  when: not agent_installed.stat.exists
+
+- name: "Agent | Configure ossec.conf with manager address"
+  template:
+    src: ossec_agent.conf.j2
+    dest: /var/ossec/etc/ossec.conf
+    owner: root
+    group: wazuh
+    mode: '0640'
+  notify: restart wazuh-agent
+
+- name: "Agent | Register agent with manager (using password)"
+  shell: |
+    /var/ossec/bin/agent-auth \
+      -m {{ wazuh_manager_ip }} \
+      -A {{ inventory_hostname }} \
+      -P pfs-soc-wazuh-2026
+  args:
+    creates: /var/ossec/etc/client.keys
+  notify: restart wazuh-agent
+
+- name: "Agent | Enable and start wazuh-agent service"
+  service:
+    name: wazuh-agent
+    state: started
+    enabled: yes
+
+- name: "Agent | Wait for agent to connect to manager"
+  pause:
+    seconds: 15
+
+- name: "Agent | Verify agent status"
+  command: /var/ossec/bin/wazuh-control status
+  register: agent_status
+  changed_when: false
+
+- name: "Agent | Show agent status"
+  debug:
+    var: agent_status.stdout_lines

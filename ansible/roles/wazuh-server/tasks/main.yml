@@ -1,0 +1,156 @@
+---
+# ============================================================
+# roles/wazuh-server/tasks/main.yml
+# Installation Wazuh All-in-One (Manager + Indexer + Dashboard)
+# Script officiel Wazuh 4.x
+# ============================================================
+
+- name: "Wazuh | Add swap space (requis pour Indexer sur 4GB RAM)"
+  block:
+    - name: Check if swap already exists
+      command: swapon --show
+      register: swap_check
+      changed_when: false
+
+    - name: Create 2GB swapfile
+      command: fallocate -l 2G /swapfile
+      when: swap_check.stdout == ""
+
+    - name: Set swapfile permissions
+      file:
+        path: /swapfile
+        mode: '0600'
+      when: swap_check.stdout == ""
+
+    - name: Format swapfile
+      command: mkswap /swapfile
+      when: swap_check.stdout == ""
+
+    - name: Enable swap
+      command: swapon /swapfile
+      when: swap_check.stdout == ""
+
+    - name: Persist swap in fstab
+      lineinfile:
+        path: /etc/fstab
+        line: "/swapfile none swap sw 0 0"
+        state: present
+
+- name: "Wazuh | Kernel parameters for Indexer (OpenSearch)"
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { key: "vm.max_map_count", value: "262144" }
+    - { key: "vm.swappiness",    value: "10" }
+
+- name: "Wazuh | Install prerequisites"
+  apt:
+    name:
+      - curl
+      - apt-transport-https
+      - gnupg
+      - lsb-release
+      - unzip
+    state: present
+    update_cache: yes
+
+- name: "Wazuh | Check if already installed"
+  stat:
+    path: /var/ossec/bin/wazuh-control
+  register: wazuh_installed
+
+- name: "Wazuh | Download install script"
+  get_url:
+    url: https://packages.wazuh.com/4.11/wazuh-install.sh
+    dest: /tmp/wazuh-install.sh
+    mode: '0755'
+  when: not wazuh_installed.stat.exists
+
+- name: "Wazuh | Run all-in-one installer (10-15 min)"
+  command: bash /tmp/wazuh-install.sh -a -i
+  args:
+    creates: /var/ossec/bin/wazuh-control
+  async: 1200    # 20 min max
+  poll: 30       # Check toutes les 30s
+  when: not wazuh_installed.stat.exists
+  register: wazuh_install_result
+
+- name: "Wazuh | Ensure services are started"
+  service:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - wazuh-manager
+    - wazuh-indexer
+    - wazuh-dashboard
+
+- name: "Wazuh | Wait for Manager to be fully up"
+  wait_for:
+    port: 1514
+    host: 0.0.0.0
+    delay: 10
+    timeout: 120
+
+- name: "Wazuh | Wait for Dashboard to be ready"
+  wait_for:
+    port: 443
+    host: 0.0.0.0
+    delay: 15
+    timeout: 180
+
+- name: "Wazuh | Get admin password"
+  command: tar -axf /tmp/wazuh-passwords.tar -O wazuh-install-files/wazuh-passwords.txt
+  register: wazuh_passwords
+  changed_when: false
+  failed_when: false
+
+- name: "Wazuh | Display credentials"
+  debug:
+    msg: |
+      ╔══════════════════════════════════════════╗
+      ║     WAZUH INSTALLATION COMPLETE          ║
+      ║                                          ║
+      ║  Dashboard: https://{{ ansible_host }}   ║
+      ║  User: admin                             ║
+      ║  Password: (see wazuh-passwords.txt)     ║
+      ╚══════════════════════════════════════════╝
+
+- name: "Wazuh | Configure manager for agent registration"
+  lineinfile:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '<use_password>no</use_password>'
+    line: '    <use_password>yes</use_password>'
+    backrefs: yes
+  notify: restart wazuh-manager
+
+- name: "Wazuh | Set agent registration password"
+  copy:
+    content: "pfs-soc-wazuh-2026"
+    dest: /var/ossec/etc/authd.pass
+    owner: root
+    group: wazuh
+    mode: '0640'
+  notify: restart wazuh-manager
+
+- name: "Wazuh | Enable File Integrity Monitoring on key paths"
+  blockinfile:
+    path: /var/ossec/etc/ossec.conf
+    insertafter: '<syscheck>'
+    marker: "<!-- {mark} ANSIBLE MANAGED FIM BLOCK -->"
+    block: |
+      <directories check_all="yes" realtime="yes">/etc,/usr/bin,/usr/sbin</directories>
+      <directories check_all="yes" realtime="yes">/var/www,/home</directories>
+  notify: restart wazuh-manager
+
+- name: "Wazuh | Verify manager status"
+  command: /var/ossec/bin/wazuh-control status
+  register: wazuh_status
+  changed_when: false
+
+- name: "Wazuh | Show status"
+  debug:
+    var: wazuh_status.stdout_lines

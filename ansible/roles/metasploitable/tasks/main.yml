@@ -1,0 +1,48 @@
+---
+# ============================================================
+# roles/metasploitable/tasks/main.yml
+# Configuration de l'instance vulnérable pour la démo
+# Installe les services vulnérables + Wazuh agent
+# ============================================================
+
+- name: "Meta | Install vulnerable services for demo"
+  apt:
+    name:
+      - vsftpd
+      - telnetd
+      - openssh-server
+    state: present
+    update_cache: yes
+
+- name: "Meta | Configure weak FTP (demo only)"
+  lineinfile:
+    path: /etc/vsftpd.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - { regexp: "^anonymous_enable", line: "anonymous_enable=YES" }
+    - { regexp: "^local_enable",     line: "local_enable=YES" }
+    - { regexp: "^write_enable",     line: "write_enable=YES" }
+  notify: restart vsftpd
+
+- name: "Meta | Allow more SSH auth attempts (brute-force demo)"
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?MaxAuthTries"
+    line: "MaxAuthTries 20"
+  notify: restart sshd
+
+- name: "Meta | Create demo user with weak password for brute-force"
+  user:
+    name: demouser
+    password: "{{ 'admin' | password_hash('sha512') }}"
+    shell: /bin/bash
+
+- name: "Meta | Start services"
+  service:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - vsftpd
+    - ssh

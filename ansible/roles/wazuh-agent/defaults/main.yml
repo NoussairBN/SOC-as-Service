@@ -1,0 +1,5 @@
+---
+# Variables par défaut du rôle wazuh-agent
+wazuh_manager_ip: "10.1.1.109"
+wazuh_agent_name: "{{ inventory_hostname }}"
+wazuh_registration_password: "pfs-soc-wazuh-2026"

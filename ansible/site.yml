@@ -1,42 +1,65 @@
 ---
 # ============================================================
-# Ansible Main Playbook — SOC-as-Code PFS
-# ============================================================
+# ansible/site.yml — Playbook Principal SOC-as-Code
 # Ordre d'exécution :
-# 1. Configurer le serveur Wazuh (SOC VPC)
-# 2. Installer les agents Wazuh sur toutes les instances client
-# 3. Installer DVWA sur l'instance dédiée
-# 4. Installer Metasploitable sur l'instance dédiée
+#   1. wazuh-server (manager doit être UP avant les agents)
+#   2. dvwa          (app vulnérable + cible brute-force)
+#   3. wazuh-agent   (sur DVWA + Metasploitable)
 # ============================================================
 
-# ----- Play 1 : Wazuh Server (VPC SOC) -----
-- name: "🛡️ Configure Wazuh Server"
-  hosts: role_wazuh_server
-  become: true
-  gather_facts: true
-  roles:
-    - wazuh-server
+# ── PLAY 1 : Wazuh Server (VPC SOC) ─────────────────────────
+- name: "SOC | Install and configure Wazuh Server"
+  hosts: soc
+  become: yes
+  gather_facts: yes
 
-# ----- Play 2 : Wazuh Agents (VPC Client) -----
-- name: "📡 Install Wazuh Agents on Client VPC"
-  hosts: role_client
-  become: true
-  gather_facts: true
   roles:
-    - wazuh-agent
+    - role: wazuh-server
+      tags: [wazuh, server, soc]
 
-# ----- Play 3 : DVWA (instance spécifique) -----
-- name: "🕸️ Deploy DVWA (Vulnerable Web App)"
-  hosts: role_dvwa
-  become: true
-  gather_facts: true
-  roles:
-    - dvwa
+  post_tasks:
+    - name: "Verify Wazuh Manager is listening on port 1514"
+      wait_for:
+        port: 1514
+        host: 0.0.0.0
+        timeout: 60
+      tags: verify
 
-# ----- Play 4 : Metasploitable target -----
-- name: "🎯 Configure Metasploitable Target"
-  hosts: role_metasploitable
-  become: true
-  gather_facts: true
+# ── PLAY 2 : DVWA (VPC Client — subnet privé) ───────────────
+- name: "CLIENT | Install DVWA (vulnerable app)"
+  hosts: dvwa
+  become: yes
+  gather_facts: yes
+
   roles:
-    - metasploitable
+    - role: dvwa
+      tags: [dvwa, client]
+
+# ── PLAY 3 : Wazuh Agents (DVWA + Metasploitable) ───────────
+- name: "CLIENT | Deploy Wazuh Agents"
+  hosts: client
+  become: yes
+  gather_facts: yes
+
+  vars:
+    wazuh_manager_ip: "10.1.1.109"
+
+  roles:
+    - role: wazuh-agent
+      tags: [wazuh, agent, client]
+
+  post_tasks:
+    - name: "Confirm agent connected to manager"
+      command: /var/ossec/bin/agent_control -l
+      register: agents_list
+      delegate_to: "{{ groups['soc'][0] }}"
+      changed_when: false
+      failed_when: false
+      run_once: true
+      tags: verify
+
+    - name: "Show registered agents"
+      debug:
+        var: agents_list.stdout_lines
+      run_once: true
+      tags: verify
