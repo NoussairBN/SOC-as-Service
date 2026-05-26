@@ -150,6 +150,7 @@
   command: /var/ossec/bin/wazuh-control status
   register: wazuh_status
   changed_when: false
+  failed_when: false   # wazuh-clusterd/maild optionnels retournent exit 1
 
 - name: "Wazuh | Show status"
   debug:
