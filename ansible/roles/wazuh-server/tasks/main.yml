@@ -88,12 +88,26 @@
     - wazuh-indexer
     - wazuh-dashboard
 
-- name: "Wazuh | Wait for Manager to be fully up"
-  wait_for:
-    port: 1514
-    host: 0.0.0.0
-    delay: 10
-    timeout: 120
+- name: "Wazuh | Verify ossec.conf XML is valid"
+  command: xmllint --noout /var/ossec/etc/ossec.conf
+  register: xml_check
+  changed_when: false
+  failed_when: false
+
+- name: "Wazuh | Restart manager if config is valid"
+  service:
+    name: wazuh-manager
+    state: restarted
+  when: xml_check.rc == 0
+
+- name: "Wazuh | Wait for wazuh-remoted to be running"
+  shell: /var/ossec/bin/wazuh-control status | grep 'wazuh-remoted is running'
+  register: remoted_status
+  retries: 12
+  delay: 10
+  until: remoted_status.rc == 0
+  changed_when: false
+  failed_when: false
 
 - name: "Wazuh | Wait for Dashboard to be ready"
   wait_for:
@@ -175,14 +189,8 @@
     insertbefore: '</ossec_config>'
     marker: "<!-- {mark} ANSIBLE MANAGED ACTIVE RESPONSE -->"
     block: |
-      <!-- Active Response : blocage automatique IP -->
-      <command>
-        <name>firewall-drop</name>
-        <executable>firewall-drop</executable>
-        <timeout_allowed>yes</timeout_allowed>
-      </command>
-
-      <!-- Blocage SSH brute-force sévère (règle 100011 - 15+ failures) -->
+      <!-- Active Response : firewall-drop est deja defini par Wazuh -->
+      <!-- Blocage SSH brute-force severe (regle 100011 - 15+ failures) -->
       <active-response>
         <command>firewall-drop</command>
         <location>local</location>
@@ -205,7 +213,6 @@
         <rules_id>100042</rules_id>
         <timeout>86400</timeout>
       </active-response>
-  notify: restart wazuh-manager
 
 - name: "SOC | Enhanced FIM — Monitor critical paths with realtime"
   blockinfile:
