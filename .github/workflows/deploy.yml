@@ -133,41 +133,72 @@ jobs:
       - name: Install Ansible
         run: pip install ansible
 
-      - name: Setup SSH Key
+      - name: Setup SSH Key and Config
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/pfs-soc-key
+          # Write private key - strip CRLF Windows line endings
+          printf '%s' "${{ secrets.EC2_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/pfs-soc-key
           chmod 600 ~/.ssh/pfs-soc-key
+          # Validate key
           ssh-keygen -l -f ~/.ssh/pfs-soc-key
 
-      - name: Generate Ansible Inventory from Terraform outputs
+      - name: Generate SSH Config and Ansible Inventory
         run: |
           BASTION="${{ needs.terraform.outputs.bastion_ip }}"
           WAZUH_PRIV="${{ needs.terraform.outputs.wazuh_priv_ip }}"
           DVWA="${{ needs.terraform.outputs.dvwa_ip }}"
           META="${{ needs.terraform.outputs.meta_ip }}"
 
+          # SSH config - key explicite pour bastion ET pour les hotes prives
+          cat > ~/.ssh/config << EOF
+          Host bastion
+            HostName ${BASTION}
+            User ubuntu
+            IdentityFile ~/.ssh/pfs-soc-key
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ServerAliveInterval 30
+
+          Host 10.0.*.*
+            User ubuntu
+            IdentityFile ~/.ssh/pfs-soc-key
+            ProxyJump bastion
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+
+          Host 10.1.*.*
+            User ubuntu
+            IdentityFile ~/.ssh/pfs-soc-key
+            ProxyJump bastion
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+
+          # Test bastion SSH avant tout
+          echo "Testing bastion SSH..."
+          ssh bastion 'echo BASTION_OK && hostname'
+
+          # Inventaire Ansible simplifie (SSH config gere le ProxyJump)
           cat > ansible/inventory/hosts.yml << EOF
           all:
             vars:
               ansible_user: ubuntu
               ansible_ssh_private_key_file: ~/.ssh/pfs-soc-key
+              ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
             children:
               soc:
                 hosts:
                   wazuh-server:
                     ansible_host: ${WAZUH_PRIV}
-                    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyJump=ubuntu@${BASTION}"
               client:
                 hosts:
                   dvwa:
                     ansible_host: ${DVWA}
-                    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyJump=ubuntu@${BASTION}"
                   metasploitable:
                     ansible_host: ${META}
-                    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyJump=ubuntu@${BASTION}"
           EOF
-          echo "Inventory generated:"
+          echo "Inventory:"
           cat ansible/inventory/hosts.yml
 
       - name: Wait for instances to be SSH-ready
