@@ -72,9 +72,9 @@ jobs:
 
       - name: Setup Terraform
         run: |
-          curl -fsSL https://releases.hashicorp.com/terraform/1.7.5/terraform_1.7.5_linux_amd64.zip -o tf.zip
-          unzip -o tf.zip
-          sudo mv -f terraform /usr/local/bin/terraform
+          curl -fsSL https://releases.hashicorp.com/terraform/1.7.5/terraform_1.7.5_linux_amd64.zip -o /tmp/tf.zip
+          unzip -o /tmp/tf.zip -d /tmp/tf_bin
+          sudo mv -f /tmp/tf_bin/terraform /usr/local/bin/terraform
           terraform version
 
       - name: Terraform Init
