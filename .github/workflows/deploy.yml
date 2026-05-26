@@ -136,11 +136,18 @@ jobs:
       - name: Setup SSH Key and Config
         run: |
           mkdir -p ~/.ssh
-          # Write private key - strip CRLF Windows line endings
-          printf '%s' "${{ secrets.EC2_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/pfs-soc-key
+
+          # Ecrire la cle privee
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/pfs-soc-key
           chmod 600 ~/.ssh/pfs-soc-key
-          # Validate key
-          ssh-keygen -l -f ~/.ssh/pfs-soc-key
+
+          # Debug : verifier le format du fichier
+          echo "=== Debut du fichier cle ==="
+          head -3 ~/.ssh/pfs-soc-key
+          echo "=== Nombre de lignes ==="
+          wc -l ~/.ssh/pfs-soc-key
+          echo "=== Caracteres speciaux ==="
+          cat -A ~/.ssh/pfs-soc-key | head -3
 
       - name: Generate SSH Config and Ansible Inventory
         run: |
