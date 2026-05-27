@@ -109,7 +109,7 @@ jobs:
         run: |
           echo "bastion_ip=$(terraform output -raw bastion_public_ip)"           >> $GITHUB_OUTPUT
           echo "wazuh_pub_ip=$(terraform output -raw wazuh_public_ip)"           >> $GITHUB_OUTPUT
-          echo "wazuh_priv_ip=$(terraform output -raw wazuh_public_ip | xargs -I{} aws ec2 describe-instances --filters Name=ip-address,Values={} --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text 2>/dev/null || echo '10.1.1.109')" >> $GITHUB_OUTPUT
+          echo "wazuh_priv_ip=$(terraform output -raw wazuh_private_ip)"         >> $GITHUB_OUTPUT
           echo "dvwa_ip=$(terraform output -raw dvwa_private_ip)"                >> $GITHUB_OUTPUT
           echo "meta_ip=$(terraform output -raw metasploitable_private_ip)"      >> $GITHUB_OUTPUT
         env:

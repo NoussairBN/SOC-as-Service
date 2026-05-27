@@ -12,6 +12,11 @@ output "wazuh_public_ip" {
   value       = module.compute_soc.wazuh_public_ip
 }
 
+output "wazuh_private_ip" {
+  description = "Private IP of the Wazuh server"
+  value       = module.compute_soc.wazuh_private_ip
+}
+
 output "wazuh_dashboard_url" {
   description = "Wazuh Dashboard URL"
   value       = "https://${module.compute_soc.wazuh_public_ip}"
@@ -34,7 +39,7 @@ output "ssh_bastion_command" {
 
 output "ssh_wazuh_via_bastion" {
   description = "SSH command to connect to Wazuh via Bastion jump"
-  value       = "ssh -i ~/.ssh/pfs-soc-key -J ubuntu@${module.compute_client.bastion_public_ip} ubuntu@${module.compute_soc.wazuh_public_ip}"
+  value       = "ssh -i ~/.ssh/pfs-soc-key -J ubuntu@${module.compute_client.bastion_public_ip} ubuntu@${module.compute_soc.wazuh_private_ip}"
 }
 
 output "ami_id_used" {
