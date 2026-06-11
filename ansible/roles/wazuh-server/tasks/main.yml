@@ -171,68 +171,30 @@
     mode: '0640'
   notify: restart wazuh-manager
 
-- name: "SOC | Deploy Active Response + Enhanced FIM + Log Analysis"
-  shell: |
-    MARKER="ANSIBLE MANAGED SOC UPGRADE v3"
-    if ! grep -q "$MARKER" /var/ossec/etc/ossec.conf; then
-      cat >> /var/ossec/etc/ossec.conf << 'EOCONF'
-    <!-- ANSIBLE MANAGED SOC UPGRADE v3 - DO NOT EDIT MANUALLY -->
-    <ossec_config>
+# ── SOC Config Block (Active Response + FIM + Logs) ─────────
+# Correction : le heredoc inline dans YAML causait une erreur
+# "failed at splitting arguments" a cause des caracteres
+# speciaux (fleches Unicode, quotes) dans le shell multi-ligne.
+# Solution : stocker le bloc XML dans un fichier externe et
+# l'appender via un simple shell one-liner.
 
-      <!-- ═══ ACTIVE RESPONSE ═══ -->
-      <!-- SSH Brute Force critique (15+ tentatives) → blocage IP 1h -->
-      <active-response>
-        <command>firewall-drop</command>
-        <location>local</location>
-        <rules_id>100011</rules_id>
-        <timeout>3600</timeout>
-      </active-response>
-      <!-- Brute force Wazuh built-in → blocage IP 30min -->
-      <active-response>
-        <command>firewall-drop</command>
-        <location>local</location>
-        <rules_id>5763</rules_id>
-        <timeout>1800</timeout>
-      </active-response>
-      <!-- OS Command Injection DVWA (100043) → blocage IP 24h -->
-      <active-response>
-        <command>firewall-drop</command>
-        <location>all</location>
-        <rules_id>100043</rules_id>
-        <timeout>86400</timeout>
-      </active-response>
+- name: "SOC | Copy SOC configuration block to server"
+  copy:
+    src: soc_ossec_config.xml
+    dest: /tmp/soc_ossec_config.xml
+    mode: '0644'
 
-      <!-- ═══ ENHANCED FIM ═══ -->
-      <syscheck>
-        <directories check_all="yes" realtime="yes" report_changes="yes">/etc/passwd,/etc/shadow,/etc/sudoers</directories>
-        <directories check_all="yes" realtime="yes" report_changes="yes">/etc/cron.d,/var/spool/cron,/etc/crontab</directories>
-        <directories check_all="yes" realtime="yes">/usr/bin,/usr/sbin,/bin,/sbin</directories>
-        <directories check_all="yes" realtime="yes">/var/www,/srv/http,/opt</directories>
-        <ignore>/proc</ignore>
-        <ignore>/sys</ignore>
-        <ignore>/dev</ignore>
-      </syscheck>
-
-      <!-- ═══ LOG ANALYSIS (Manager only) ═══ -->
-      <!-- NOTE: Le manager n'a pas Apache/Nginx installé.           -->
-      <!-- Les agents DVWA/Meta ont leur propre ossec.conf           -->
-      <!-- configuré via le template ossec_agent.conf.j2.           -->
-      <localfile>
-        <log_format>syslog</log_format>
-        <location>/var/log/auth.log</location>
-      </localfile>
-
-    </ossec_config>
-    EOCONF
-      echo "SOC config block appended"
-    else
-      echo "SOC config already present - skipping"
-    fi
+- name: "SOC | Append SOC config block to ossec.conf (idempotent)"
+  shell: >-
+    if ! grep -q "ANSIBLE MANAGED SOC UPGRADE v3" /var/ossec/etc/ossec.conf;
+    then cat /tmp/soc_ossec_config.xml >> /var/ossec/etc/ossec.conf && echo "SOC config block appended";
+    else echo "SOC config already present - skipping"; fi
   args:
     executable: /bin/bash
-  changed_when: "'SOC config block appended' in soc_config_result.stdout"
   register: soc_config_result
+  changed_when: "'SOC config block appended' in soc_config_result.stdout"
   notify: restart wazuh-manager
+
 
 - name: "SOC | Verify custom rules syntax"
   command: /var/ossec/bin/wazuh-logtest -t
