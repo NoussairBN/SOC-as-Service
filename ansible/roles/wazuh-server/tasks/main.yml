@@ -116,11 +116,19 @@
     delay: 15
     timeout: 180
 
-- name: "Wazuh | Get admin password"
-  shell: >-
-    tar -axf /tmp/wazuh-passwords.tar -O wazuh-install-files/wazuh-passwords.txt 2>/dev/null
-    || cat /tmp/wazuh-install-files/wazuh-passwords.txt 2>/dev/null
-    || echo "Password file not found - check /tmp/ on server"
+- name: "Wazuh | Get admin password (multiple fallback locations)"
+  shell: |
+    if tar -axf /tmp/wazuh-passwords.tar -O wazuh-install-files/wazuh-passwords.txt 2>/dev/null; then
+      exit 0
+    elif [ -f /tmp/wazuh-install-files/wazuh-passwords.txt ]; then
+      cat /tmp/wazuh-install-files/wazuh-passwords.txt
+    else
+      echo "Wazuh deja installe - fichier temporaire supprime"
+      echo "Pour recuperer le mot de passe, executer sur le serveur :"
+      echo "sudo /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh -u admin"
+    fi
+  args:
+    executable: /bin/bash
   register: wazuh_passwords
   changed_when: false
   failed_when: false
@@ -129,13 +137,10 @@
   debug:
     msg: |
       ============================================================
-      Wazuh installation complete.
-      Dashboard : https://{{ ansible_host }}
-      User      : admin
-      Password  : {{ wazuh_passwords.stdout | regex_search("password: (.+)", "\1") | first | default("run: sudo tar -axf /tmp/wazuh-passwords.tar -O wazuh-install-files/wazuh-passwords.txt") }}
+      Wazuh Dashboard : https://{{ ansible_host }}
+      User            : admin
       ============================================================
-      Full password file:
-      {{ wazuh_passwords.stdout }}
+      {{ wazuh_passwords.stdout | default('Password file not available') }}
       ============================================================
 
 - name: "Wazuh | Configure manager for agent registration"
