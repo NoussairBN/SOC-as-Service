@@ -173,29 +173,32 @@
 
 - name: "SOC | Deploy Active Response + Enhanced FIM + Log Analysis"
   shell: |
-    MARKER="ANSIBLE MANAGED SOC UPGRADE v2"
+    MARKER="ANSIBLE MANAGED SOC UPGRADE v3"
     if ! grep -q "$MARKER" /var/ossec/etc/ossec.conf; then
       cat >> /var/ossec/etc/ossec.conf << 'EOCONF'
-    <!-- ANSIBLE MANAGED SOC UPGRADE v2 - DO NOT EDIT MANUALLY -->
+    <!-- ANSIBLE MANAGED SOC UPGRADE v3 - DO NOT EDIT MANUALLY -->
     <ossec_config>
 
       <!-- ═══ ACTIVE RESPONSE ═══ -->
+      <!-- SSH Brute Force critique (15+ tentatives) → blocage IP 1h -->
       <active-response>
         <command>firewall-drop</command>
         <location>local</location>
         <rules_id>100011</rules_id>
         <timeout>3600</timeout>
       </active-response>
+      <!-- Brute force Wazuh built-in → blocage IP 30min -->
       <active-response>
         <command>firewall-drop</command>
         <location>local</location>
         <rules_id>5763</rules_id>
         <timeout>1800</timeout>
       </active-response>
+      <!-- OS Command Injection DVWA (100043) → blocage IP 24h -->
       <active-response>
         <command>firewall-drop</command>
         <location>all</location>
-        <rules_id>100042</rules_id>
+        <rules_id>100043</rules_id>
         <timeout>86400</timeout>
       </active-response>
 
@@ -210,15 +213,10 @@
         <ignore>/dev</ignore>
       </syscheck>
 
-      <!-- ═══ LOG ANALYSIS ═══ -->
-      <localfile>
-        <log_format>apache</log_format>
-        <location>/var/log/apache2/access.log</location>
-      </localfile>
-      <localfile>
-        <log_format>apache</log_format>
-        <location>/var/log/nginx/access.log</location>
-      </localfile>
+      <!-- ═══ LOG ANALYSIS (Manager only) ═══ -->
+      <!-- NOTE: Le manager n'a pas Apache/Nginx installé.           -->
+      <!-- Les agents DVWA/Meta ont leur propre ossec.conf           -->
+      <!-- configuré via le template ossec_agent.conf.j2.           -->
       <localfile>
         <log_format>syslog</log_format>
         <location>/var/log/auth.log</location>
@@ -246,10 +244,12 @@
   debug:
     msg: |
       SOC configuration complete.
-      - Custom rules deployed  : IDs 100001-100042
-      - Active Response        : firewall-drop on brute-force and injection
-      - Enhanced FIM           : real-time monitoring of sensitive files
-      - Log analysis           : web (Apache/Nginx) + authentication logs
-      Coverage: SQL Injection, XSS, LFI, SSH brute force,
-                privilege escalation, reverse shells, DVWA endpoints.
+      - Custom rules deployed  : IDs 100001-100043
+      - Active Response        : firewall-drop (100011 SSH, 5763, 100043 CMDi)
+      - Enhanced FIM           : real-time monitoring of /etc, cron, binaries
+      - Log analysis           : auth.log (manager), dvwa-access.log (agents)
+      Coverage: SQL Injection (100001/100006), XSS (100003 L12),
+                LFI (100004 L11), SSH BF (100010/100011),
+                OS Command Injection POST (100043 via if_sid=31108),
+                Privilege Escalation (100020/100021), Persistence (100030/100031).
 

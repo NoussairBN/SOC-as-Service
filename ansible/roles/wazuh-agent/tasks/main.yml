@@ -2,7 +2,14 @@
 # ============================================================
 # roles/wazuh-agent/tasks/main.yml
 # Installation et configuration de l'agent Wazuh
-# Cibles : DVWA + Metasploitable (VPC Client subnet privé)
+# Cibles : DVWA (dvwa-apache) + Metasploitable (VPC Client)
+#
+# FIXES APPLIQUÉS :
+#   - wazuh_agent_name : utilise le nom défini en host_var
+#     (dvwa-apache pour DVWA, inventory_hostname pour les autres)
+#   - Suppression de client.keys avant agent-auth pour forcer
+#     une ré-inscription propre et éviter les conflits de noms
+#   - Nettoyage de l'entrée stale sur le manager avant inscription
 # ============================================================
 
 - name: "Agent | Install prerequisites"
@@ -40,9 +47,8 @@
     allow_downgrade: yes
   environment:
     WAZUH_MANAGER: "{{ wazuh_manager_ip }}"
-    WAZUH_AGENT_NAME: "{{ inventory_hostname }}"
+    WAZUH_AGENT_NAME: "{{ wazuh_agent_name | default(inventory_hostname) }}"
   when: not agent_installed.stat.exists
-
 
 - name: "Agent | Configure ossec.conf with manager address"
   template:
@@ -53,16 +59,46 @@
     mode: '0640'
   notify: restart wazuh-agent
 
-- name: "Agent | Register agent with manager (with authd password)"
+# ── Ré-inscription propre ────────────────────────────────────
+# Problème rencontré : si un agent avec le même nom/IP existait
+# déjà dans client.keys du manager (re-déploiement), l'agent
+# se connectait avec un mauvais ID ou le mauvais nom.
+# Solution : nettoyer d'abord l'entrée stale sur le manager,
+# puis supprimer client.keys local pour forcer une inscription fraîche.
+
+- name: "Agent | Remove stale entry on manager (by agent name)"
+  shell: |
+    AGENT_NAME="{{ wazuh_agent_name | default(inventory_hostname) }}"
+    KEYS_FILE="/var/ossec/etc/client.keys"
+    if grep -qw "$AGENT_NAME" "$KEYS_FILE" 2>/dev/null; then
+      OLD_ID=$(grep -w "$AGENT_NAME" "$KEYS_FILE" | awk '{print $1}')
+      sed -i "/^$OLD_ID /d" "$KEYS_FILE"
+      echo "REMOVED stale entry for $AGENT_NAME (ID: $OLD_ID)"
+    else
+      echo "No stale entry for $AGENT_NAME — OK"
+    fi
+  delegate_to: "{{ groups['soc'][0] }}"
+  changed_when: false
+  ignore_errors: true
+  tags: [register]
+
+- name: "Agent | Delete local client.keys to force fresh registration"
+  file:
+    path: /var/ossec/etc/client.keys
+    state: absent
+  ignore_errors: true
+  tags: [register]
+
+- name: "Agent | Register agent with manager (authd password)"
   shell: |
     /var/ossec/bin/agent-auth \
       -m {{ wazuh_manager_ip }} \
-      -A {{ inventory_hostname }} \
+      -A {{ wazuh_agent_name | default(inventory_hostname) }} \
       -P pfs-soc-wazuh-2026
-  args:
-    creates: /var/ossec/etc/client.keys
+  register: agent_auth_result
+  failed_when: agent_auth_result.rc != 0
   notify: restart wazuh-agent
-
+  tags: [register]
 
 - name: "Agent | Enable and start wazuh-agent service"
   service:

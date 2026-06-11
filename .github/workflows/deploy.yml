@@ -210,6 +210,8 @@ jobs:
                 hosts:
                   dvwa:
                     ansible_host: ${DVWA}
+                    wazuh_agent_name: dvwa-apache
+                    is_dvwa_host: true
                   metasploitable:
                     ansible_host: ${META}
           EOF

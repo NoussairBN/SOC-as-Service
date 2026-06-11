@@ -1,14 +1,16 @@
+#!/bin/bash
+# Write a clean ossec.conf for the dvwa-apache agent
+cat > /var/ossec/etc/ossec.conf << 'OSSECEOF'
 <ossec_config>
 
   <!-- ═══════════════════════════════════════════════════════
-       Agent Configuration — {{ inventory_hostname }}
-       Agent Name in Wazuh : {{ wazuh_agent_name | default(inventory_hostname) }}
-       Manager : {{ wazuh_manager_ip }}
+       Agent Configuration — dvwa-apache
+       Manager : 10.1.1.133
        ═══════════════════════════════════════════════════════ -->
 
   <client>
     <server>
-      <address>{{ wazuh_manager_ip }}</address>
+      <address>10.1.1.133</address>
       <port>1514</port>
       <protocol>tcp</protocol>
     </server>
@@ -32,7 +34,7 @@
     <ignore>/etc/mail/statistics</ignore>
   </syscheck>
 
-  <!-- Log collection — Auth et système (tous les agents) -->
+  <!-- Log collection -->
   <localfile>
     <log_format>syslog</log_format>
     <location>/var/log/auth.log</location>
@@ -43,22 +45,11 @@
     <location>/var/log/syslog</location>
   </localfile>
 
-{% if is_dvwa_host | default(false) %}
-  <!-- ═══ DVWA ONLY : Logs Docker Apache forwardés par dvwa-log-forwarder.service ═══ -->
-  <!-- DVWA tourne dans Docker. Le service dvwa-log-forwarder streame         -->
-  <!-- les logs Apache du container vers /var/log/dvwa-access.log sur le host.-->
-  <!-- /var/log/apache2/access.log n'existe PAS sur le host (dans container). -->
+  <!-- DVWA Apache access log forwarded from Docker container -->
   <localfile>
     <log_format>apache</log_format>
     <location>/var/log/dvwa-access.log</location>
   </localfile>
-{% else %}
-  <!-- Agents non-DVWA : logs Apache standard du host -->
-  <localfile>
-    <log_format>apache</log_format>
-    <location>/var/log/apache2/access.log</location>
-  </localfile>
-{% endif %}
 
   <!-- Active Response -->
   <active-response>
@@ -67,3 +58,20 @@
   </active-response>
 
 </ossec_config>
+OSSECEOF
+
+chown root:wazuh /var/ossec/etc/ossec.conf
+chmod 640 /var/ossec/etc/ossec.conf
+echo "ossec.conf written."
+
+# Test config
+echo "=== Testing config ==="
+/var/ossec/bin/wazuh-agentd -t
+echo "Config OK"
+
+# Restart agent
+echo "=== Starting wazuh-agent ==="
+/var/ossec/bin/wazuh-control start
+sleep 5
+echo "=== Agent logs ==="
+tail -10 /var/ossec/logs/ossec.log

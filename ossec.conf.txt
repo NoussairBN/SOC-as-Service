@@ -1,14 +1,13 @@
 <ossec_config>
 
   <!-- ═══════════════════════════════════════════════════════
-       Agent Configuration — {{ inventory_hostname }}
-       Agent Name in Wazuh : {{ wazuh_agent_name | default(inventory_hostname) }}
-       Manager : {{ wazuh_manager_ip }}
+       Agent Configuration — metasploitable
+       Manager : 10.1.1.109
        ═══════════════════════════════════════════════════════ -->
 
   <client>
     <server>
-      <address>{{ wazuh_manager_ip }}</address>
+      <address>10.1.1.133</address>
       <port>1514</port>
       <protocol>tcp</protocol>
     </server>
@@ -32,7 +31,7 @@
     <ignore>/etc/mail/statistics</ignore>
   </syscheck>
 
-  <!-- Log collection — Auth et système (tous les agents) -->
+  <!-- Log collection -->
   <localfile>
     <log_format>syslog</log_format>
     <location>/var/log/auth.log</location>
@@ -43,22 +42,18 @@
     <location>/var/log/syslog</location>
   </localfile>
 
-{% if is_dvwa_host | default(false) %}
-  <!-- ═══ DVWA ONLY : Logs Docker Apache forwardés par dvwa-log-forwarder.service ═══ -->
-  <!-- DVWA tourne dans Docker. Le service dvwa-log-forwarder streame         -->
-  <!-- les logs Apache du container vers /var/log/dvwa-access.log sur le host.-->
-  <!-- /var/log/apache2/access.log n'existe PAS sur le host (dans container). -->
-  <localfile>
-    <log_format>apache</log_format>
-    <location>/var/log/dvwa-access.log</location>
-  </localfile>
-{% else %}
-  <!-- Agents non-DVWA : logs Apache standard du host -->
   <localfile>
     <log_format>apache</log_format>
     <location>/var/log/apache2/access.log</location>
   </localfile>
-{% endif %}
+
+  <!-- Docker container logs (DVWA Apache via Docker) -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/lib/docker/containers/*/*.log</location>
+  </localfile>
+
+
 
   <!-- Active Response -->
   <active-response>
@@ -66,4 +61,9 @@
     <ca_store>/var/ossec/etc/wpk_root.pem</ca_store>
   </active-response>
 
+
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/dvwa-apache.log</location>
+  </localfile>
 </ossec_config>

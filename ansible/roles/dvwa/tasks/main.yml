@@ -2,6 +2,13 @@
 # ============================================================
 # roles/dvwa/tasks/main.yml
 # Installation DVWA via Docker sur le subnet privé Client
+#
+# FIXES APPLIQUÉS :
+#   - dvwa-log-forwarder.service : service systemd qui streame
+#     les logs Apache du container Docker vers le host
+#     (/var/log/dvwa-access.log).
+#   - Sans ce service, le wazuh-agent ne peut pas lire les logs
+#     Apache car ils sont DANS le container, pas sur le host.
 # ============================================================
 
 - name: "DVWA | Install Docker dependencies"
@@ -63,7 +70,6 @@
       --name dvwa \
       --restart unless-stopped \
       -p 80:80 \
-      -e DB_SERVER=db \
       vulnerables/web-dvwa
   when: "'dvwa' not in dvwa_running.stdout"
 
@@ -90,6 +96,65 @@
         shell: /bin/bash
         state: present
 
+# ── Docker Log Forwarder ─────────────────────────────────────
+# PROBLÈME : DVWA tourne dans Docker. Les logs Apache sont dans
+#            le container (/var/log/apache2/access.log).
+#            Le wazuh-agent sur le HOST ne peut pas les lire.
+# SOLUTION : Service systemd qui tail les logs via docker exec
+#            et les écrit sur le host dans /var/log/dvwa-access.log.
+#            Le wazuh-agent monitore ce fichier (cf. ossec.conf.j2).
+
+- name: "DVWA | Create log file for Apache access logs"
+  file:
+    path: /var/log/dvwa-access.log
+    state: touch
+    owner: root
+    group: adm
+    mode: '0644'
+  changed_when: false
+
+- name: "DVWA | Deploy dvwa-log-forwarder systemd service"
+  copy:
+    dest: /etc/systemd/system/dvwa-log-forwarder.service
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=DVWA Docker Apache Log Forwarder for Wazuh
+      Documentation=https://github.com/NoussairBN/SOC-as-Service
+      After=docker.service
+      Requires=docker.service
+
+      [Service]
+      Type=simple
+      Restart=always
+      RestartSec=10
+      # Attendre que le container dvwa soit UP avant de démarrer
+      ExecStartPre=/bin/bash -c 'for i in $(seq 1 30); do docker ps | grep -q dvwa && exit 0; sleep 2; done; exit 1'
+      # Streamer les logs Apache du container vers le fichier host
+      ExecStart=/bin/bash -c 'docker exec dvwa tail -F /var/log/apache2/access.log >> /var/log/dvwa-access.log'
+      # S'assurer que le fichier de log est accessible
+      ExecStartPost=/bin/chmod 644 /var/log/dvwa-access.log
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: restart dvwa-log-forwarder
+
+- name: "DVWA | Reload systemd daemon"
+  systemd:
+    daemon_reload: yes
+
+- name: "DVWA | Enable and start dvwa-log-forwarder"
+  service:
+    name: dvwa-log-forwarder
+    state: started
+    enabled: yes
+
+- name: "DVWA | Wait for log forwarder to populate log file"
+  pause:
+    seconds: 10
+
 - name: "DVWA | Verify container status"
   shell: docker ps --filter "name=dvwa" --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}"
   register: dvwa_status
@@ -98,3 +163,13 @@
 - name: "DVWA | Show container status"
   debug:
     var: dvwa_status.stdout_lines
+
+- name: "DVWA | Verify log forwarder is active"
+  shell: systemctl is-active dvwa-log-forwarder
+  register: forwarder_status
+  changed_when: false
+  failed_when: false
+
+- name: "DVWA | Show log forwarder status"
+  debug:
+    msg: "dvwa-log-forwarder: {{ forwarder_status.stdout }} | Log file: $(wc -l /var/log/dvwa-access.log 2>/dev/null)"

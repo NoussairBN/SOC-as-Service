@@ -3,9 +3,6 @@
 <!-- Detection rules - SOC-as-Service PFS 2026                   -->
 <!-- MITRE ATT&CK Cloud Matrix v14                               -->
 <!--                                                              -->
-<!-- RÈGLES VALIDÉES avec wazuh-logtest en production            -->
-<!-- Toutes les règles ont été testées et confirmées.            -->
-<!--                                                              -->
 <!-- Valid Wazuh match fields: match, regex, url, id,            -->
 <!-- srcip, status, user, program_name, hostname                 -->
 <!-- ============================================================ -->
@@ -75,7 +72,7 @@
   <!-- Level 11 > 100040 (level 10) so this rule takes priority -->
   <rule id="100004" level="11">
     <if_sid>31100</if_sid>
-    <match>%2e%2e%2f|%2e%2e/|\.\.\/|%252e%252e|%c0%af|%c1%9c|/etc/passwd|/etc/shadow|/etc/hosts|/proc/self|/var/log/|WEB-INF|\.htaccess|\.htpasswd|php://|file://|expect://</match>
+    <match>%2e%2e%2f|%2e%2e/|\.\./|%252e%252e|%c0%af|%c1%9c|/etc/passwd|/etc/shadow|/etc/hosts|/proc/self|/var/log/|WEB-INF|\.htaccess|\.htpasswd|php://|file://|expect://</match>
     <description>SOC | Local File Inclusion / Path Traversal attempt detected</description>
     <mitre>
       <id>T1083</id>
@@ -85,7 +82,7 @@
 
   <!-- OS Command Injection on DVWA /vulnerabilities/exec          -->
   <!-- Detects shell metacharacters appended to the ip= parameter  -->
-  <!-- OS Command Injection via GET (payload visible in URL)       -->
+  <!-- OS Command Injection via GET (payload visible in URL) -->
   <rule id="100041" level="13">
     <if_sid>31100</if_sid>
     <url>/vulnerabilities/exec</url>
@@ -97,12 +94,9 @@
     <group>web,command_injection,dvwa,attack,</group>
   </rule>
 
-  <!-- OS Command Injection via POST — payload dans le corps HTTP          -->
-  <!-- PROBLÈME : POST /vulnerabilities/exec/ déclenche la règle Wazuh    -->
-  <!-- built-in 31108 "Ignored URLs" (level 0) qui SILENÇAIT l'alerte.   -->
-  <!-- SOLUTION : if_sid=31108 pour intercepter EXACTEMENT ces requêtes   -->
-  <!-- et les transformer en alerte niveau 13.                             -->
-  <!-- Validé avec wazuh-logtest le 11/06/2026.                           -->
+  <!-- OS Command Injection via POST — payload in body, not in Apache log      -->
+  <!-- POST /vulnerabilities/exec/ fires rule 31108 (Ignored URLs, level 0)   -->
+  <!-- We override 31108 for this specific URL to generate a level 13 alert   -->
   <rule id="100043" level="13">
     <if_sid>31108</if_sid>
     <url>/vulnerabilities/exec</url>
@@ -116,14 +110,13 @@
 
   <!-- ============================================================ -->
   <!-- DVWA-SPECIFIC RULES                                          -->
-  <!-- DVWA est déployé sur le VPC Client (subnet privé).          -->
-  <!-- L'agent monitore les logs Docker forwardés vers             -->
-  <!-- /var/log/dvwa-access.log par dvwa-log-forwarder.service.    -->
+  <!-- DVWA is deployed on the client VPC (private subnet).        -->
+  <!-- The agent monitors Docker container logs forwarded to       -->
+  <!-- /var/log/dvwa-apache.log (apache log format).               -->
   <!-- ============================================================ -->
 
-  <!-- Accès à n'importe quel endpoint vulnérable DVWA -->
-  <!-- Filet de sécurité générique — level 10 pour ne pas masquer  -->
-  <!-- les règles spécifiques qui ont des niveaux plus élevés.      -->
+  <!-- Access to any DVWA vulnerable endpoint -->
+  <!-- Any request to /vulnerabilities/* is noteworthy        -->
   <rule id="100040" level="10">
     <if_sid>31100</if_sid>
     <url>/vulnerabilities/exec|/vulnerabilities/sqli|/vulnerabilities/sqli_blind|/vulnerabilities/xss_r|/vulnerabilities/xss_s|/vulnerabilities/xss_d|/vulnerabilities/fi|/vulnerabilities/upload|/vulnerabilities/csrf</url>

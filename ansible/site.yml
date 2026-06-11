@@ -40,9 +40,9 @@
   hosts: client
   become: yes
   gather_facts: yes
-
-  vars:
-    wazuh_manager_ip: "10.1.1.109"
+  # wazuh_manager_ip est défini dans les group_vars du groupe 'client'
+  # (ansible/inventory/hosts.yml ou inventory généré par le pipeline).
+  # Ne pas le redéfinir ici pour éviter d'écraser la valeur dynamique.
 
   roles:
     - role: wazuh-agent

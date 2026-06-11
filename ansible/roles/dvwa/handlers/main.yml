@@ -3,3 +3,8 @@
   service:
     name: sshd
     state: restarted
+
+- name: restart dvwa-log-forwarder
+  service:
+    name: dvwa-log-forwarder
+    state: restarted
