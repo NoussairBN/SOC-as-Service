@@ -122,16 +122,13 @@
   changed_when: false
   failed_when: false
 
-- name: "Wazuh | Display credentials"
+- name: "Wazuh | Display access information"
   debug:
     msg: |
-      ╔══════════════════════════════════════════╗
-      ║     WAZUH INSTALLATION COMPLETE          ║
-      ║                                          ║
-      ║  Dashboard: https://{{ ansible_host }}   ║
-      ║  User: admin                             ║
-      ║  Password: (see wazuh-passwords.txt)     ║
-      ╚══════════════════════════════════════════╝
+      Wazuh installation complete.
+      Dashboard : https://{{ ansible_host }}
+      User      : admin
+      Password  : see wazuh-passwords.txt on the server
 
 - name: "Wazuh | Configure manager for agent registration"
   lineinfile:
@@ -161,9 +158,9 @@
   debug:
     var: wazuh_status.stdout_lines
 
-# ════════════════════════════════════════════════════════════
-# UPGRADE SOC — Règles de détection custom + Active Response
-# ════════════════════════════════════════════════════════════
+# ============================================================
+# Custom detection rules and Active Response configuration
+# ============================================================
 
 - name: "SOC | Deploy custom detection rules"
   copy:
@@ -245,23 +242,14 @@
   changed_when: false
   failed_when: false
 
-- name: "SOC | Show rules validation"
+- name: "SOC | Show rules validation result"
   debug:
     msg: |
-      ╔══════════════════════════════════════════════════════╗
-      ║     SOC UPGRADE COMPLETE                             ║
-      ║                                                      ║
-      ║  ✅ Custom rules deployed  (100001-100061)           ║
-      ║  ✅ Active Response        (auto-block IP)           ║
-      ║  ✅ Enhanced FIM           (realtime monitoring)     ║
-      ║  ✅ Log analysis           (web + auth logs)         ║
-      ║                                                      ║
-      ║  Detected attacks:                                   ║
-      ║    • SQL Injection / XSS / LFI                      ║
-      ║    • SSH + Web Brute Force                           ║
-      ║    • Privilege Escalation                            ║
-      ║    • Port Scanning                                   ║
-      ║    • Reverse Shells                                  ║
-      ║    • DVWA-specific attacks                           ║
-      ╚══════════════════════════════════════════════════════╝
+      SOC configuration complete.
+      - Custom rules deployed  : IDs 100001-100042
+      - Active Response        : firewall-drop on brute-force and injection
+      - Enhanced FIM           : real-time monitoring of sensitive files
+      - Log analysis           : web (Apache/Nginx) + authentication logs
+      Coverage: SQL Injection, XSS, LFI, SSH brute force,
+                privilege escalation, reverse shells, DVWA endpoints.
 

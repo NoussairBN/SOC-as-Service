@@ -1,52 +1,76 @@
 <!-- ============================================================ -->
 <!-- custom_rules.xml                                             -->
-<!-- Règles de détection SOC-as-Service — PFS 2026               -->
-<!-- Champs valides Wazuh : match, regex, url, id, srcip, status -->
+<!-- Detection rules - SOC-as-Service PFS 2026                   -->
+<!-- MITRE ATT&CK Cloud Matrix v14                               -->
+<!--                                                              -->
+<!-- Valid Wazuh match fields: match, regex, url, id,            -->
+<!-- srcip, status, user, program_name, hostname                 -->
 <!-- ============================================================ -->
 <group name="soc_custom,">
 
-  <!-- ══════════════════════════════════════════════════════════ -->
-  <!-- WEB ATTACKS — SQL Injection / XSS / LFI / RFI             -->
-  <!-- Basé sur les logs Apache/Nginx décodés (decoder: web-log) -->
-  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- ============================================================ -->
+  <!-- WEB ATTACKS - SQL Injection / XSS / LFI                     -->
+  <!-- Based on Apache/Nginx logs decoded by the web-log decoder.  -->
+  <!-- Rule 31103: web log with HTTP status code extracted.        -->
+  <!-- Rule 31100: raw web log line (fallback for POST requests).  -->
+  <!-- SQLi payloads may appear in the URL (GET) or in the raw     -->
+  <!-- log line (POST body echoed in error/debug output).          -->
+  <!-- ============================================================ -->
 
-  <!-- SQL Injection patterns dans l'URL -->
+  <!-- SQL Injection: patterns in the decoded URL field (GET requests) -->
+  <!-- Covers the most common SQLi keywords used in DVWA and sqlmap  -->
   <rule id="100001" level="10">
     <if_sid>31103</if_sid>
-    <url>union select|union+select|select.*from|insert into|drop table|delete from|exec xp_|exec sp_|cast\(|convert\(|char\(|nchar\(|varchar\(|group by|order by|having 1</url>
-    <description>SOC | SQL Injection attempt detected in web request</description>
+    <url>union(\+|%20|%09)select|select(\+|%20|%09).*from|insert(\+|%20)into|drop(\+|%20)table|delete(\+|%20)from|exec(\+|%20)(xp_|sp_)|cast\(|convert\(|char\(|nchar\(|varchar\(|benchmark\(|sleep\(|waitfor|0x[0-9a-f]{4,}|' or |' and |1=1|1=2|--(\+|%20)|;--</url>
+    <description>SOC | SQL Injection attempt detected in web request URL</description>
     <mitre>
       <id>T1190</id>
     </mitre>
     <group>web,sql_injection,attack,</group>
   </rule>
 
-  <!-- SQL Injection repeat - brute -->
+  <!-- SQL Injection: patterns in the raw log line (POST requests).  -->
+  <!-- When DVWA processes a POST, the query may appear in error     -->
+  <!-- output or debug logs captured by the log collector.           -->
+  <rule id="100006" level="10">
+    <if_sid>31100</if_sid>
+    <match>union select|UNION SELECT|union+select|select from|SELECT FROM|insert into|INSERT INTO|drop table|DROP TABLE|' or '1'='1|' OR '1'='1|1=1--| or 1=1|waitfor delay|benchmark\(|sleep\(</match>
+    <description>SOC | SQL Injection payload detected in raw web log (POST)</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>web,sql_injection,attack,</group>
+  </rule>
+
+  <!-- SQL Injection repeated attempts (brute-force with sqlmap or manual) -->
+  <!-- Triggered when the same IP sends 5+ SQLi attempts within 60s       -->
   <rule id="100002" level="12" frequency="5" timeframe="60">
-    <if_matched_sid>100001</if_matched_sid>
+    <if_matched_sid>100001,100006</if_matched_sid>
     <same_source_ip />
-    <description>SOC | SQL Injection brute-force — multiple attempts from same IP</description>
+    <description>SOC | SQL Injection brute-force: 5+ attempts from the same IP in 60s</description>
     <mitre>
       <id>T1190</id>
     </mitre>
     <group>web,sql_injection,attack,</group>
   </rule>
 
-  <!-- XSS patterns -->
+  <!-- XSS: Cross-Site Scripting patterns in URL -->
+  <!-- Covers reflected XSS attempts on DVWA /vulnerabilities/xss_r -->
   <rule id="100003" level="8">
     <if_sid>31103</if_sid>
-    <url>script>|javascript:|onerror=|onload=|eval\(|document\.cookie|alert\(|&lt;script|%3cscript</url>
-    <description>SOC | XSS (Cross-Site Scripting) attempt detected</description>
+    <url>script>|%3cscript|javascript:|onerror=|onload=|onmouseover=|eval\(|document\.cookie|alert\(|prompt\(|confirm\(|String\.fromCharCode|&#x|%3c%73%63%72%69%70%74</url>
+    <description>SOC | XSS (Cross-Site Scripting) attempt detected in URL</description>
     <mitre>
       <id>T1059.007</id>
     </mitre>
     <group>web,xss,attack,</group>
   </rule>
 
-  <!-- LFI / Path Traversal -->
+  <!-- LFI / Path Traversal: directory traversal and sensitive file access -->
+  <!-- Covers encoded variants: %2e%2e, %252e%252e, etc.                  -->
   <rule id="100004" level="9">
     <if_sid>31103</if_sid>
-    <url>\.\./|\.\./|%2e%2e%2f|%252e%252e|/etc/passwd|/etc/shadow|/proc/self|/var/log|/etc/hosts</url>
+    <url>\.\./|%2e%2e%2f|%252e%252e|%c0%af|%c1%9c|/etc/passwd|/etc/shadow|/etc/hosts|/proc/self|/var/log|/var/www|/boot/grub|/root/|WEB-INF|\.htaccess|\.htpasswd|php://|file://|expect://</url>
     <description>SOC | Local File Inclusion / Path Traversal attempt detected</description>
     <mitre>
       <id>T1083</id>
@@ -54,103 +78,131 @@
     <group>web,lfi,attack,</group>
   </rule>
 
-  <!-- Web Scanner Detection -->
+  <!-- Web vulnerability scanner detection via User-Agent string -->
+  <!-- sqlmap, nikto, dirbuster, etc. all send distinctive User-Agents -->
   <rule id="100005" level="8">
     <if_sid>31103</if_sid>
-    <match>nikto|sqlmap|dirbuster|gobuster|wfuzz|masscan|nessus|openvas|w3af|skipfish</match>
-    <description>SOC | Web vulnerability scanner detected in User-Agent or request</description>
+    <match>sqlmap|nikto|dirbuster|gobuster|wfuzz|masscan|nessus|openvas|w3af|skipfish|ZAP|burpsuite|havij|acunetix|nmap scripting|python-requests/2\.</match>
+    <description>SOC | Web vulnerability scanner detected via User-Agent or request pattern</description>
     <mitre>
       <id>T1595</id>
     </mitre>
     <group>web,scanner,recon,</group>
   </rule>
 
-  <!-- ══════════════════════════════════════════════════════════ -->
-  <!-- BRUTE FORCE — Seuils personnalisés                         -->
-  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- ============================================================ -->
+  <!-- BRUTE FORCE - SSH and web authentication                     -->
+  <!--                                                              -->
+  <!-- SSH failure SIDs in Wazuh 4.x:                             -->
+  <!--   5710: sshd authentication failed (password)               -->
+  <!--   5716: sshd authentication failed (invalid user)           -->
+  <!--   5758: sshd Maximum authentication attempts exceeded        -->
+  <!-- Both are matched here to cover all SSH failure scenarios.   -->
+  <!-- ============================================================ -->
 
-  <!-- SSH Brute Force — 5 tentatives en 60s -->
+  <!-- SSH Brute Force: 5+ failures from the same source IP in 60s -->
   <rule id="100010" level="12" frequency="5" timeframe="60">
-    <if_matched_sid>5710</if_matched_sid>
+    <if_matched_sid>5710,5716</if_matched_sid>
     <same_source_ip />
-    <description>SOC | SSH Brute Force Attack — 5+ failures from same IP in 60s</description>
+    <description>SOC | SSH Brute Force: 5+ authentication failures from the same IP in 60s</description>
     <mitre>
       <id>T1110.001</id>
     </mitre>
     <group>authentication_failures,brute_force,pci_dss_11.4,</group>
   </rule>
 
-  <!-- SSH Brute Force sévère — 15 tentatives → Active Response -->
+  <!-- SSH Brute Force critical: 15+ failures in 120s -> Active Response -->
+  <!-- This rule triggers the firewall-drop response on the agent.       -->
   <rule id="100011" level="15" frequency="15" timeframe="120">
-    <if_matched_sid>5710</if_matched_sid>
+    <if_matched_sid>5710,5716</if_matched_sid>
     <same_source_ip />
-    <description>SOC | CRITICAL: SSH Brute Force — 15+ failures — Active Response triggered</description>
+    <description>SOC | CRITICAL: SSH Brute Force - 15+ failures - Active Response firewall-drop triggered</description>
     <mitre>
       <id>T1110.001</id>
     </mitre>
     <group>authentication_failures,brute_force,active_response,</group>
   </rule>
 
-  <!-- ══════════════════════════════════════════════════════════ -->
-  <!-- PRIVILEGE ESCALATION                                       -->
-  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- SSH maximum attempts exceeded (immediate block) -->
+  <rule id="100012" level="12">
+    <if_sid>5758</if_sid>
+    <description>SOC | SSH max authentication attempts exceeded on this session</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication_failures,brute_force,</group>
+  </rule>
 
-  <!-- Sudo vers root -->
+  <!-- ============================================================ -->
+  <!-- PRIVILEGE ESCALATION                                         -->
+  <!-- Detected via PAM/sudo logs (auth.log) collected by the      -->
+  <!-- agent localfile configuration.                              -->
+  <!-- ============================================================ -->
+
+  <!-- Sudo privilege escalation via dangerous interpreters or shells -->
   <rule id="100020" level="12">
     <if_sid>5402</if_sid>
-    <match>sudo su|sudo bash|sudo -i|sudo python|sudo perl|sudo ruby|sudo nc|sudo vim|sudo less|sudo more</match>
-    <description>SOC | Privilege escalation attempt via sudo shell/interpreter</description>
+    <match>sudo su|sudo bash|sudo sh|sudo -i|sudo -s|sudo python|sudo python3|sudo perl|sudo ruby|sudo nc|sudo ncat|sudo vim|sudo less|sudo more|sudo tee|sudo find|sudo awk|sudo sed</match>
+    <description>SOC | Privilege escalation attempt via sudo shell or interpreter</description>
     <mitre>
       <id>T1548.003</id>
     </mitre>
     <group>privilege_escalation,sudo,</group>
   </rule>
 
-  <!-- /etc/passwd modification détectée par FIM -->
+  <!-- Modification of critical authentication files (detected by FIM)  -->
+  <!-- FIM realtime monitoring configured in ossec.conf syscheck block  -->
   <rule id="100021" level="14">
     <if_sid>550,554</if_sid>
-    <match>/etc/passwd|/etc/shadow|/etc/sudoers</match>
-    <description>SOC | CRITICAL: System authentication file modified</description>
+    <match>/etc/passwd|/etc/shadow|/etc/sudoers|/etc/sudoers.d</match>
+    <description>SOC | CRITICAL: System authentication file modified - possible account persistence</description>
     <mitre>
       <id>T1098</id>
     </mitre>
     <group>privilege_escalation,fim,authentication,</group>
   </rule>
 
-  <!-- ══════════════════════════════════════════════════════════ -->
-  <!-- MALWARE / PERSISTENCE                                      -->
-  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- ============================================================ -->
+  <!-- MALWARE AND PERSISTENCE                                      -->
+  <!-- ============================================================ -->
 
-  <!-- Crontab modification (FIM) -->
+  <!-- Cron job modification detected by FIM -->
+  <!-- Attackers use cron for persistent command execution         -->
   <rule id="100030" level="11">
     <if_sid>550,554</if_sid>
-    <match>/etc/cron|/var/spool/cron|/etc/crontab</match>
-    <description>SOC | Cron job modified — possible persistence mechanism</description>
+    <match>/etc/cron|/var/spool/cron|/etc/crontab|/etc/cron.d</match>
+    <description>SOC | Cron job modified - possible persistence mechanism</description>
     <mitre>
       <id>T1053.005</id>
     </mitre>
     <group>persistence,cron,fim,</group>
   </rule>
 
-  <!-- Reverse shell patterns dans syslog -->
+  <!-- Reverse shell patterns in syslog / auth.log                  -->
+  <!-- Using if_sid 0 is invalid; we use the syslog parent SID 1002 -->
+  <!-- which covers lines from /var/log/syslog and /var/log/auth.log -->
   <rule id="100031" level="14">
-    <if_sid>0</if_sid>
-    <match>bash -i|nc -e /bin/|ncat -e|python -c.*socket|perl -e.*socket|ruby -rsocket</match>
-    <description>SOC | CRITICAL: Reverse shell command detected in system logs</description>
+    <if_sid>1002</if_sid>
+    <match>bash -i|/bin/bash -i|nc -e /bin/|ncat -e /bin/|python -c.*socket|python3 -c.*socket|perl -e.*socket|ruby -rsocket|mkfifo.*nc|/dev/tcp/|/dev/udp/</match>
+    <description>SOC | CRITICAL: Reverse shell command pattern detected in system logs</description>
     <mitre>
       <id>T1059.004</id>
     </mitre>
     <group>malware,reverse_shell,attack,</group>
   </rule>
 
-  <!-- ══════════════════════════════════════════════════════════ -->
-  <!-- DVWA SPECIFIC                                              -->
-  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- ============================================================ -->
+  <!-- DVWA-SPECIFIC RULES                                          -->
+  <!-- DVWA is deployed on the client VPC (private subnet).        -->
+  <!-- The agent monitors Docker container logs forwarded to       -->
+  <!-- /var/log/dvwa-apache.log (apache log format).               -->
+  <!-- ============================================================ -->
 
-  <!-- Accès aux endpoints vulnérables DVWA -->
+  <!-- Access to any DVWA vulnerable endpoint -->
+  <!-- Any request to /dvwa/vulnerabilities/* is noteworthy        -->
   <rule id="100040" level="10">
     <if_sid>31103</if_sid>
-    <url>/dvwa/vulnerabilities/exec|/dvwa/vulnerabilities/sqli|/dvwa/vulnerabilities/xss_r|/dvwa/vulnerabilities/fi</url>
+    <url>/dvwa/vulnerabilities/exec|/dvwa/vulnerabilities/sqli|/dvwa/vulnerabilities/sqli_blind|/dvwa/vulnerabilities/xss_r|/dvwa/vulnerabilities/xss_s|/dvwa/vulnerabilities/xss_d|/dvwa/vulnerabilities/fi|/dvwa/vulnerabilities/upload|/dvwa/vulnerabilities/csrf</url>
     <description>SOC | Attack attempt on DVWA vulnerable endpoint</description>
     <mitre>
       <id>T1190</id>
@@ -158,11 +210,12 @@
     <group>web,dvwa,attack,</group>
   </rule>
 
-  <!-- Command injection dans DVWA -->
+  <!-- OS Command Injection on DVWA /vulnerabilities/exec          -->
+  <!-- Detects shell metacharacters appended to the ip= parameter  -->
   <rule id="100041" level="13">
     <if_sid>31103</if_sid>
     <url>/dvwa/vulnerabilities/exec</url>
-    <match>ip=.*[;&|`]</match>
+    <match>ip=.*[;&|`$]|ip=.*%3b|ip=.*%7c|ip=.*%26</match>
     <description>SOC | CRITICAL: OS Command Injection on DVWA exec endpoint</description>
     <mitre>
       <id>T1059</id>
@@ -170,12 +223,13 @@
     <group>web,command_injection,dvwa,attack,</group>
   </rule>
 
-  <!-- HTTP 4xx multiple sur DVWA = scan -->
+  <!-- Web directory scan: 20+ HTTP 4xx errors from the same IP in 60s -->
+  <!-- Typical behavior of dirb, gobuster, wfuzz running against DVWA  -->
   <rule id="100042" level="8" frequency="20" timeframe="60">
     <if_matched_sid>31103</if_matched_sid>
     <same_source_ip />
-    <status>404|403|401</status>
-    <description>SOC | Web directory scan detected — multiple 4xx errors from same IP</description>
+    <status>404|403|401|400</status>
+    <description>SOC | Web directory scan detected - 20+ HTTP 4xx errors from the same IP in 60s</description>
     <mitre>
       <id>T1595.003</id>
     </mitre>

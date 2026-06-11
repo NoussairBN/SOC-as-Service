@@ -1,4 +1,4 @@
-name: "🔐 Shift-Left Security Scan"
+name: "Shift-Left Security Scan"
 
 on:
   pull_request:

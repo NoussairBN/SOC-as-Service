@@ -1,4 +1,4 @@
-name: "🚀 Deploy SOC Infrastructure"
+name: "Deploy SOC Infrastructure"
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Action to perform"
+        description: "Action to perform (plan / apply / destroy)"
         required: true
         default: "apply"
         type: choice
@@ -26,27 +26,38 @@ permissions:
   contents: read
 
 jobs:
-  # ── JOB 1 : Shift-Left Security Scan ──────────────────────
+  # ============================================================
+  # JOB 1 - Shift-Left Security Scan
+  # Analyse statique de l'IaC avant tout deploiement.
+  # Checkov et Trivy detectent les mauvaises configurations
+  # Terraform (CRITICAL/HIGH) sans bloquer le pipeline (soft-fail).
+  # ============================================================
   security-scan:
-    name: "🔐 Checkov + Tfsec"
+    name: "Security Scan (Checkov + Trivy)"
     runs-on: ubuntu-latest
     steps:
       - name: Clone repository
         run: git clone https://github.com/${{ github.repository }}.git .
 
-      - name: Run Checkov
+      - name: Run Checkov (IaC security analysis)
         run: |
           pip install checkov
           checkov -d terraform/ --soft-fail || true
 
-      - name: Run Trivy (IaC scan - remplace tfsec archivé)
+      - name: Run Trivy (IaC vulnerability scan)
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin
           trivy config terraform/ --exit-code 0 --severity HIGH,CRITICAL || true
 
-  # ── JOB 2 : Terraform ──────────────────────────────────────
+  # ============================================================
+  # JOB 2 - Terraform Provisioning
+  # Deploie ou detruit l'infrastructure AWS (VPCs, subnets,
+  # instances EC2, Security Groups, VPC Peering, S3 backend).
+  # Les IPs des instances sont exportees vers le job Ansible.
+  # ============================================================
   terraform:
-    name: "🏗️ Terraform ${{ github.event.inputs.action || 'apply' }}"
+    name: "Terraform ${{ github.event.inputs.action || 'apply' }}"
     runs-on: ubuntu-latest
     needs: security-scan
     outputs:
@@ -70,9 +81,10 @@ jobs:
           aws configure set region                "$AWS_REGION"
           aws sts get-caller-identity
 
-      - name: Setup Terraform
+      - name: Install Terraform 1.11.4
         run: |
-          curl -fsSL https://releases.hashicorp.com/terraform/1.11.4/terraform_1.11.4_linux_amd64.zip -o /tmp/tf.zip
+          curl -fsSL https://releases.hashicorp.com/terraform/1.11.4/terraform_1.11.4_linux_amd64.zip \
+            -o /tmp/tf.zip
           unzip -o /tmp/tf.zip -d /tmp/tf_bin
           sudo mv -f /tmp/tf_bin/terraform /usr/local/bin/terraform
           terraform version
@@ -102,23 +114,29 @@ jobs:
             -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
             -var="my_public_ip=0.0.0.0/0"
 
-      - name: Extract Outputs
+      - name: Extract instance IP addresses from Terraform outputs
         id: outputs
         if: github.event.inputs.action != 'destroy' && github.event.inputs.action != 'plan'
         working-directory: terraform
         run: |
-          echo "bastion_ip=$(terraform output -raw bastion_public_ip)"           >> $GITHUB_OUTPUT
-          echo "wazuh_pub_ip=$(terraform output -raw wazuh_public_ip)"           >> $GITHUB_OUTPUT
-          echo "wazuh_priv_ip=$(terraform output -raw wazuh_private_ip)"         >> $GITHUB_OUTPUT
-          echo "dvwa_ip=$(terraform output -raw dvwa_private_ip)"                >> $GITHUB_OUTPUT
-          echo "meta_ip=$(terraform output -raw metasploitable_private_ip)"      >> $GITHUB_OUTPUT
+          echo "bastion_ip=$(terraform output -raw bastion_public_ip)"        >> $GITHUB_OUTPUT
+          echo "wazuh_pub_ip=$(terraform output -raw wazuh_public_ip)"        >> $GITHUB_OUTPUT
+          echo "wazuh_priv_ip=$(terraform output -raw wazuh_private_ip)"      >> $GITHUB_OUTPUT
+          echo "dvwa_ip=$(terraform output -raw dvwa_private_ip)"             >> $GITHUB_OUTPUT
+          echo "meta_ip=$(terraform output -raw metasploitable_private_ip)"   >> $GITHUB_OUTPUT
         env:
           AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-  # ── JOB 3 : Ansible Configuration ─────────────────────────
+  # ============================================================
+  # JOB 3 - Ansible Configuration
+  # Configure toutes les instances via SSH (ProxyJump via Bastion).
+  # Ordre : Wazuh Server -> DVWA -> Agents Wazuh.
+  # Le manager doit etre operationnel avant l'enregistrement
+  # des agents.
+  # ============================================================
   ansible:
-    name: "⚙️ Ansible — Configure SOC"
+    name: "Ansible - Configure SOC"
     runs-on: ubuntu-latest
     needs: terraform
     if: |
@@ -130,33 +148,22 @@ jobs:
       - name: Clone repository
         run: git clone https://github.com/${{ github.repository }}.git .
 
-      - name: Install Ansible
+      - name: Install Ansible and dependencies
         run: pip install ansible passlib
 
-      - name: Setup SSH Key and Config
+      - name: Write SSH private key
         run: |
           mkdir -p ~/.ssh
-
-          # Ecrire la cle privee
           echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/pfs-soc-key
           chmod 600 ~/.ssh/pfs-soc-key
 
-          # Debug : verifier le format du fichier
-          echo "=== Debut du fichier cle ==="
-          head -3 ~/.ssh/pfs-soc-key
-          echo "=== Nombre de lignes ==="
-          wc -l ~/.ssh/pfs-soc-key
-          echo "=== Caracteres speciaux ==="
-          cat -A ~/.ssh/pfs-soc-key | head -3
-
-      - name: Generate SSH Config and Ansible Inventory
+      - name: Generate SSH config and Ansible inventory
         run: |
           BASTION="${{ needs.terraform.outputs.bastion_ip }}"
           WAZUH_PRIV="${{ needs.terraform.outputs.wazuh_priv_ip }}"
           DVWA="${{ needs.terraform.outputs.dvwa_ip }}"
           META="${{ needs.terraform.outputs.meta_ip }}"
 
-          # SSH config - key explicite pour bastion ET pour les hotes prives
           cat > ~/.ssh/config << EOF
           Host bastion
             HostName ${BASTION}
@@ -182,11 +189,8 @@ jobs:
           EOF
           chmod 600 ~/.ssh/config
 
-          # Test bastion SSH avant tout
-          echo "Testing bastion SSH..."
-          ssh bastion 'echo BASTION_OK && hostname'
+          ssh bastion 'echo "Bastion reachable: $(hostname)"'
 
-          # Inventaire Ansible simplifie (SSH config gere le ProxyJump)
           cat > ansible/inventory/hosts.yml << EOF
           all:
             vars:
@@ -209,8 +213,6 @@ jobs:
                   metasploitable:
                     ansible_host: ${META}
           EOF
-          echo "Inventory:"
-          cat ansible/inventory/hosts.yml
 
       - name: Run Ansible Playbook
         working-directory: ansible
@@ -224,13 +226,13 @@ jobs:
             -v \
             --timeout 900
 
-      - name: "🎉 Deployment Summary"
+      - name: Deployment summary
         if: success()
         run: |
-          echo "╔══════════════════════════════════════════════════╗"
-          echo "║          SOC-as-Service DEPLOYED                 ║"
-          echo "╠══════════════════════════════════════════════════╣"
-          echo "║  Wazuh Dashboard : https://${{ needs.terraform.outputs.wazuh_pub_ip }}"
-          echo "║  Bastion SSH     : ubuntu@${{ needs.terraform.outputs.bastion_ip }}"
-          echo "║  Login Wazuh     : admin / (wazuh-passwords.txt) ║"
-          echo "╚══════════════════════════════════════════════════╝"
+          echo "============================================================"
+          echo "  SOC-as-Service - Deployment Complete"
+          echo "============================================================"
+          echo "  Wazuh Dashboard : https://${{ needs.terraform.outputs.wazuh_pub_ip }}"
+          echo "  Bastion SSH     : ubuntu@${{ needs.terraform.outputs.bastion_ip }}"
+          echo "  Wazuh login     : admin / (see wazuh-passwords.txt on server)"
+          echo "============================================================"
