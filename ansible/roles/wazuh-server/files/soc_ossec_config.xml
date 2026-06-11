@@ -4,6 +4,21 @@
 <!-- ============================================================ -->
 <ossec_config>
 
+  <!-- Force re-registration : permet aux agents de se re-inscrire        -->
+  <!-- automatiquement sans erreur 'Duplicate agent name'.                 -->
+  <!-- Essentiel pour les re-deploiements pipeline (agent deja enregistre) -->
+  <auth>
+    <disabled>no</disabled>
+    <port>1515</port>
+    <use_password>yes</use_password>
+    <force>
+      <enabled>yes</enabled>
+      <disconnected_time enabled="yes">0s</disconnected_time>
+      <after_registration_time>0s</after_registration_time>
+      <key_mismatch enabled="yes">yes</key_mismatch>
+    </force>
+  </auth>
+
   <!-- Active Response : SSH Brute Force critique (15+ tentatives) = blocage IP 1h -->
   <active-response>
     <command>firewall-drop</command>
