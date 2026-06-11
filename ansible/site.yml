@@ -4,14 +4,23 @@
 # Ordre d'execution :
 #   1. wazuh-server (manager doit etre UP avant les agents)
 #   2. dvwa          (app vulnerable + cible brute-force)
-#   3. wazuh-agent   (sur DVWA uniquement - cible principale)
+#   3. wazuh-agent   (sur DVWA - cible principale de la demo)
 # ============================================================
 
 # -- PLAY 1 : Wazuh Server (VPC SOC) -------------------------
 - name: "SOC | Install and configure Wazuh Server"
   hosts: soc
   become: yes
-  gather_facts: yes
+  gather_facts: no
+
+  pre_tasks:
+    - name: "SOC | Wait for SSH to be available on Wazuh server"
+      wait_for_connection:
+        timeout: 300
+        delay: 5
+        sleep: 15
+    - name: "SOC | Gather facts"
+      setup:
 
   roles:
     - role: wazuh-server
@@ -29,7 +38,21 @@
 - name: "CLIENT | Install DVWA (vulnerable app)"
   hosts: dvwa
   become: yes
-  gather_facts: yes
+  gather_facts: no
+  ignore_unreachable: true
+
+  pre_tasks:
+    # Attendre que la machine DVWA soit accessible avant de commencer.
+    # Probleme observe : apres un premier run, Docker + log-forwarder
+    # surchargent la machine et SSH ne repond plus immediatement.
+    # wait_for_connection reessaie jusqu'a 5 minutes.
+    - name: "DVWA | Wait for SSH to be available (up to 5 min)"
+      wait_for_connection:
+        timeout: 300
+        delay: 10
+        sleep: 15
+    - name: "DVWA | Gather facts"
+      setup:
 
   roles:
     - role: dvwa
@@ -37,25 +60,27 @@
 
   post_tasks:
     # Attendre que la machine se stabilise apres l'install Docker
-    # + dvwa-log-forwarder avant d'ouvrir de nouvelles connexions SSH.
-    # Sans ce delai, Play 3 obtient "Connection timed out" car la machine
-    # est encore sous charge (Docker pull, container start, etc.)
-    - name: "DVWA | Wait 30s for machine to stabilize before agent install"
+    # avant d'ouvrir de nouvelles connexions SSH (Play 3).
+    - name: "DVWA | Wait 45s for machine to stabilize (Docker + log-forwarder)"
       pause:
-        seconds: 30
+        seconds: 45
       tags: [dvwa, wait]
 
-# -- PLAY 3 : Wazuh Agent DVWA (cible principale) -----------
-# ignore_unreachable: true -> si dvwa est toujours sous charge,
-# on ne fait pas echouer tout le pipeline.
-# La tache de verification finale sur le manager confirme si
-# l'agent s'est bien enregistre.
+# -- PLAY 3 : Wazuh Agent sur DVWA ---------------------------
 - name: "CLIENT | Deploy Wazuh Agent on DVWA"
   hosts: dvwa
   become: yes
-  gather_facts: yes
+  gather_facts: no
   ignore_unreachable: true
-  # wazuh_manager_ip vient des group_vars de l'inventaire (dynamique pipeline)
+
+  pre_tasks:
+    - name: "Agent | Wait for SSH to be available after stabilization"
+      wait_for_connection:
+        timeout: 180
+        delay: 5
+        sleep: 10
+    - name: "Agent | Gather facts"
+      setup:
 
   roles:
     - role: wazuh-agent

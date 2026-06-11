@@ -216,6 +216,34 @@ jobs:
                     ansible_host: ${META}
           EOF
 
+      - name: Wait for all instances SSH via bastion (max 8 min)
+        run: |
+          WAZUH_PRIV="${{ needs.terraform.outputs.wazuh_priv_ip }}"
+          DVWA="${{ needs.terraform.outputs.dvwa_ip }}"
+
+          wait_for_ssh() {
+            local HOST=$1
+            local LABEL=$2
+            echo "==> Waiting for SSH on ${LABEL} (${HOST})..."
+            for i in $(seq 1 48); do
+              if ssh -o StrictHostKeyChecking=no \
+                     -o UserKnownHostsFile=/dev/null \
+                     -o ConnectTimeout=10 \
+                     -o BatchMode=yes \
+                     ubuntu@${HOST} 'echo ok' 2>/dev/null; then
+                echo "    [OK] ${LABEL} reachable at attempt ${i}"
+                return 0
+              fi
+              echo "    [${i}/48] ${LABEL} not ready yet - waiting 10s..."
+              sleep 10
+            done
+            echo "    [WARN] ${LABEL} did not become reachable in 8 min"
+            return 1
+          }
+
+          wait_for_ssh "${WAZUH_PRIV}" "wazuh-server"
+          wait_for_ssh "${DVWA}"       "dvwa"
+
       - name: Run Ansible Playbook
         working-directory: ansible
         env:
