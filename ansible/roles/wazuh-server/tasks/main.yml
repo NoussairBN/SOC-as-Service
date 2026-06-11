@@ -117,7 +117,10 @@
     timeout: 180
 
 - name: "Wazuh | Get admin password"
-  command: tar -axf /tmp/wazuh-passwords.tar -O wazuh-install-files/wazuh-passwords.txt
+  shell: >-
+    tar -axf /tmp/wazuh-passwords.tar -O wazuh-install-files/wazuh-passwords.txt 2>/dev/null
+    || cat /tmp/wazuh-install-files/wazuh-passwords.txt 2>/dev/null
+    || echo "Password file not found - check /tmp/ on server"
   register: wazuh_passwords
   changed_when: false
   failed_when: false
@@ -125,10 +128,15 @@
 - name: "Wazuh | Display access information"
   debug:
     msg: |
+      ============================================================
       Wazuh installation complete.
       Dashboard : https://{{ ansible_host }}
       User      : admin
-      Password  : see wazuh-passwords.txt on the server
+      Password  : {{ wazuh_passwords.stdout | regex_search("password: (.+)", "\1") | first | default("run: sudo tar -axf /tmp/wazuh-passwords.tar -O wazuh-install-files/wazuh-passwords.txt") }}
+      ============================================================
+      Full password file:
+      {{ wazuh_passwords.stdout }}
+      ============================================================
 
 - name: "Wazuh | Configure manager for agent registration"
   lineinfile:
