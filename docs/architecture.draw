@@ -1,0 +1,124 @@
+<mxfile host="Electron" modified="2026-06-11T22:30:00.000Z" agent="5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.6.8 Chrome/114.0.5735.289 Electron/25.8.4 Safari/537.36" version="21.6.8" type="device">
+  <diagram id="SOC-Architecture" name="AWS SOC-as-Code Network Architecture">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="&lt;font style=&quot;font-size: 16px&quot;&gt;&lt;b&gt;AWS SOC-as-Code Network Architecture&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size: 12px&quot;&gt;Projet de Fin d'Études (PFS) — Déploiement Automatisé&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#1F2937;" vertex="1" parent="1">
+          <mxGeometry x="210" y="20" width="400" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- User / Auditor -->
+        <mxCell id="user" value="Admin / Auditor" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#EFF6FF;strokeColor=#2563EB;strokeWidth=2;fontColor=#1E3A8A;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="290" width="30" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- AWS Cloud Group -->
+        <mxCell id="aws" value="AWS Cloud (Region: eu-west-3)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#9CA3AF;strokeWidth=2;align=left;verticalAlign=top;spacingLeft=15;spacingTop=10;fontStyle=1;fontSize=14;fontColor=#374151;" vertex="1" parent="1">
+          <mxGeometry x="120" y="90" width="680" height="520" as="geometry" />
+        </mxCell>
+        
+        <!-- VPC Client -->
+        <mxCell id="vpc_client" value="VPC Client (10.0.0.0/16)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFDF5;strokeColor=#FBBF24;strokeWidth=2;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontStyle=1;fontSize=12;fontColor=#92400E;" vertex="1" parent="1">
+          <mxGeometry x="150" y="130" width="280" height="440" as="geometry" />
+        </mxCell>
+        
+        <!-- VPC SOC -->
+        <mxCell id="vpc_soc" value="VPC SOC (10.1.0.0/16)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EEF2FF;strokeColor=#6366F1;strokeWidth=2;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fontStyle=1;fontSize=12;fontColor=#3730A3;" vertex="1" parent="1">
+          <mxGeometry x="490" y="130" width="280" height="440" as="geometry" />
+        </mxCell>
+        
+        <!-- Subnet Public Client -->
+        <mxCell id="sub_pub_client" value="Subnet Public (10.0.1.0/24)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#4ADE80;strokeWidth=1.5;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontStyle=1;fontSize=11;fontColor=#166534;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="170" y="170" width="240" height="170" as="geometry" />
+        </mxCell>
+        
+        <!-- Subnet Private Client -->
+        <mxCell id="sub_priv_client" value="Subnet Private (10.0.2.0/24)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF2F2;strokeColor=#F87171;strokeWidth=1.5;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontStyle=1;fontSize=11;fontColor=#991B1B;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="170" y="370" width="240" height="170" as="geometry" />
+        </mxCell>
+        
+        <!-- Subnet Public SOC -->
+        <mxCell id="sub_pub_soc" value="Subnet Public (10.1.1.0/24)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#4ADE80;strokeWidth=1.5;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontStyle=1;fontSize=11;fontColor=#166534;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="510" y="170" width="240" height="370" as="geometry" />
+        </mxCell>
+        
+        <!-- Bastion Host -->
+        <mxCell id="bastion" value="&lt;b&gt;Bastion Host&lt;/b&gt;&lt;br&gt;(t3.micro)&lt;br&gt;IP: 10.0.1.10" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#3B82F6;strokeWidth=1.5;align=center;verticalAlign=middle;fontSize=11;fontColor=#1E3A8A;" vertex="1" parent="1">
+          <mxGeometry x="190" y="210" width="90" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- NAT Gateway -->
+        <mxCell id="nat_gw" value="&lt;b&gt;NAT Gateway&lt;/b&gt;&lt;br&gt;(EIP)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#10B981;strokeWidth=1.5;align=center;verticalAlign=middle;fontSize=11;fontColor=#064E3B;" vertex="1" parent="1">
+          <mxGeometry x="310" y="210" width="80" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- DVWA / Metasploitable -->
+        <mxCell id="dvwa" value="&lt;b&gt;DVWA &amp;amp; Target&lt;/b&gt;&lt;br&gt;(t3.micro)&lt;br&gt;IP: 10.0.2.20&lt;br&gt;&lt;span style=&quot;color:#EF4444; font-weight:bold;&quot;&gt;[ Wazuh Agent ]&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EF4444;strokeWidth=2;align=center;verticalAlign=middle;fontSize=11;fontColor=#111827;" vertex="1" parent="1">
+          <mxGeometry x="210" y="410" width="160" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- Wazuh Server -->
+        <mxCell id="wazuh_server" value="&lt;b&gt;Wazuh Server&lt;/b&gt;&lt;br&gt;(c7i-flex.large)&lt;br&gt;IP: 10.1.1.10&lt;br&gt;&lt;hr&gt;&lt;div style=&quot;text-align: left; margin-left: 10px;&quot;&gt;• &lt;b&gt;Wazuh Manager&lt;/b&gt; (1514/1515)&lt;br&gt;• &lt;b&gt;Wazuh Indexer&lt;/b&gt;&lt;br&gt;• &lt;b&gt;Wazuh Dashboard&lt;/b&gt; (443)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EEF2FF;strokeColor=#4F46E5;strokeWidth=2;align=center;verticalAlign=middle;fontSize=11;fontColor=#1E1B4B;" vertex="1" parent="1">
+          <mxGeometry x="530" y="220" width="200" height="150" as="geometry" />
+        </mxCell>
+        
+        <!-- VPC Peering Connection -->
+        <mxCell id="peering" value="&lt;b&gt;VPC Peering&lt;/b&gt;" style="shape=doubleEllipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;align=center;verticalAlign=middle;fontSize=10;fontColor=#374151;" vertex="1" parent="1">
+          <mxGeometry x="445" y="325" width="30" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Edge: User -> Bastion (SSH 22) -->
+        <mxCell id="edge_user_bastion" value="SSH (22)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.33;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#3B82F6;strokeWidth=1.5;fontColor=#1E3A8A;fontSize=10;" edge="1" parent="1" source="user" target="bastion">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="90,310;90,245" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Edge: User -> Wazuh Server (HTTPS 443) -->
+        <mxCell id="edge_user_dashboard" value="HTTPS (443)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.33;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#4F46E5;strokeWidth=1.5;fontColor=#1E1B4B;fontSize=10;" edge="1" parent="1" source="user" target="wazuh_server">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="100,310;100,110;630,110" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Edge: Bastion -> DVWA (SSH 22) -->
+        <mxCell id="edge_bastion_dvwa" value="SSH (22)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#3B82F6;strokeWidth=1.5;fontColor=#1E3A8A;fontSize=10;" edge="1" parent="1" source="bastion" target="dvwa">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Edge: Bastion -> Wazuh Server (SSH 22 via Peering) -->
+        <mxCell id="edge_bastion_wazuh" value="SSH (22)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#4B5563;strokeWidth=1.5;fontColor=#1F2937;fontSize=10;" edge="1" parent="1" source="bastion" target="wazuh_server">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="460,263;460,400;630,400" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Edge: Agent -> Wazuh Server (1514/1515 via Peering) -->
+        <mxCell id="edge_agent_wazuh" value="Logs &amp;amp; Events (1514/1515)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;strokeColor=#EF4444;strokeWidth=2;fontColor=#991B1B;fontSize=10;" edge="1" parent="1" source="dvwa" target="wazuh_server">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="460,455;460,333" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Edge: DVWA -> NAT Gateway (Outbound Internet) -->
+        <mxCell id="edge_dvwa_nat" value="Outbound Update" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.75;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#10B981;strokeWidth=1.2;dashed=1;fontColor=#064E3B;fontSize=10;" edge="1" parent="1" source="dvwa" target="nat_gw">
+          <mxGeometry relative="1" as="geometry">
+            <Array points="330,410;330,340;350,340" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Connection of VPCs to Peering -->
+        <mxCell id="edge_vpc_client_peering" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#6B7280;strokeWidth=2;dashed=1;" edge="1" parent="1" source="vpc_client" target="peering">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_vpc_soc_peering" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#6B7280;strokeWidth=2;dashed=1;" edge="1" parent="1" source="vpc_soc" target="peering">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

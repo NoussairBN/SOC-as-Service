@@ -1,0 +1,15 @@
+<!-- ANSIBLE AUTH FORCE v1 - DO NOT EDIT MANUALLY -->
+<!-- Permet la re-inscription automatique des agents sur les re-deploiements -->
+<ossec_config>
+  <auth>
+    <disabled>no</disabled>
+    <port>1515</port>
+    <use_password>yes</use_password>
+    <force>
+      <enabled>yes</enabled>
+      <disconnected_time enabled="yes">0s</disconnected_time>
+      <after_registration_time>0s</after_registration_time>
+      <key_mismatch enabled="yes">yes</key_mismatch>
+    </force>
+  </auth>
+</ossec_config>

@@ -208,6 +208,28 @@
   changed_when: "'SOC config block appended' in soc_config_result.stdout"
   notify: restart wazuh-manager
 
+# ── Auth Force Config (marker distinct du bloc SOC) ──────────
+# Utilise un marker separe pour ne pas etre bloque par le check
+# "ANSIBLE MANAGED SOC UPGRADE v3" qui existe deja.
+# Ce bloc configure la re-inscription automatique des agents.
+
+- name: "SOC | Copy auth force config to server"
+  copy:
+    src: auth_force_config.xml
+    dest: /tmp/auth_force_config.xml
+    mode: '0644'
+
+- name: "SOC | Append auth force config to ossec.conf (idempotent)"
+  shell: >-
+    if ! grep -q "ANSIBLE AUTH FORCE v1" /var/ossec/etc/ossec.conf;
+    then cat /tmp/auth_force_config.xml >> /var/ossec/etc/ossec.conf && echo "Auth force config appended";
+    else echo "Auth force config already present - skipping"; fi
+  args:
+    executable: /bin/bash
+  register: auth_force_result
+  changed_when: "'Auth force config appended' in auth_force_result.stdout"
+  notify: restart wazuh-manager
+
 
 - name: "SOC | Verify custom rules syntax"
   command: /var/ossec/bin/wazuh-logtest -t
