@@ -1,5 +1,5 @@
 name: "Deploy SOC Infrastructure"
-
+run-name: "Terraform ${{ inputs.action || 'push' }} — SOC Infrastructure"
 on:
   # ⚠️ Déclenchement UNIQUEMENT MANUEL via GitHub Actions
   # Le trigger automatique sur push a été désactivé (projet terminé)
