@@ -45,3 +45,10 @@ Thumbs.db
 
 # Bootstrap local
 .bootstrap_bucket_name
+
+# ============================================================
+# Grosses vidéos d'enregistrement d'écran (> 100MB, limite GitHub)
+# Seule docs/demo/demo_soc_complet.mp4 (~50MB) est versionnée
+# ============================================================
+docs/demo/demo_wazuh_dashboard.mp4
+docs/demo/demo_attack_detection.mp4
