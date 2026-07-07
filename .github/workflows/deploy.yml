@@ -1,17 +1,16 @@
 name: "Deploy SOC Infrastructure"
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "terraform/**"
-      - "ansible/**"
+  # ⚠️ Déclenchement UNIQUEMENT MANUEL via GitHub Actions
+  # Le trigger automatique sur push a été désactivé (projet terminé)
+  # pour éviter des déploiements accidentels et des coûts AWS imprévus.
+  # Pour déployer : GitHub → Actions → Deploy SOC Infrastructure → Run workflow
   workflow_dispatch:
     inputs:
       action:
         description: "Action to perform (plan / apply / destroy)"
         required: true
-        default: "apply"
+        default: "plan"     # Défaut changé à "plan" pour éviter un apply accidentel
         type: choice
         options:
           - plan

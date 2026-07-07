@@ -1,14 +1,10 @@
 name: "Shift-Left Security Scan"
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "terraform/**"
-  push:
-    branches: [main]
-    paths:
-      - "terraform/**"
+  # ⚠️ Scan désactivé sur push automatique (projet terminé)
+  # Ce scan est exécuté automatiquement en Job 1 du pipeline deploy.yml
+  # lors d'un déclenchement manuel (workflow_dispatch → apply/destroy)
+  workflow_dispatch:
 
 jobs:
   checkov:
