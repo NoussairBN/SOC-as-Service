@@ -33,7 +33,7 @@ jobs:
           # SSH config : cle explicite pour CHAQUE hop (bastion + prives)
           cat > ~/.ssh/config << 'EOF'
           Host bastion
-            HostName 32.194.75.46
+            HostName <BASTION_PUBLIC_IP>   # Remplacé dynamiquement par le pipeline deploy.yml
             User ubuntu
             IdentityFile ~/.ssh/pfs-soc-key
             StrictHostKeyChecking no
@@ -72,13 +72,13 @@ jobs:
               soc:
                 hosts:
                   wazuh-server:
-                    ansible_host: 10.1.1.109
+                    ansible_host: <WAZUH_PRIVATE_IP>
               client:
                 hosts:
                   dvwa:
-                    ansible_host: 10.0.2.206
+                    ansible_host: <DVWA_PRIVATE_IP>
                   metasploitable:
-                    ansible_host: 10.0.2.141
+                    ansible_host: <META_PRIVATE_IP>
           EOF
           cat ansible/inventory/hosts.yml
 

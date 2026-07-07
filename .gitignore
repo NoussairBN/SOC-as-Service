@@ -47,6 +47,19 @@ Thumbs.db
 .bootstrap_bucket_name
 
 # ============================================================
+# Fichiers Wazuh contenant des clés d'agents (sensibles)
+# ============================================================
+*.keys
+ossec-backup.conf
+ossec.conf.txt
+
+# ============================================================
+# Inventaire Ansible dynamique (contient les vraies IPs EC2)
+# Regénéré automatiquement par le pipeline CI/CD
+# ============================================================
+ansible/inventory/hosts.yml
+
+# ============================================================
 # Grosses vidéos d'enregistrement d'écran (> 100MB, limite GitHub)
 # Seule docs/demo/demo_soc_complet.mp4 (~50MB) est versionnée
 # ============================================================
